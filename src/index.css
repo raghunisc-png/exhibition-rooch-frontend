@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Slightly larger tap targets everywhere; this app is used on phones/tablets
+   at a busy booth, often with imprecise touches. */
+button,
+input,
+select,
+textarea,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+input[type="file"] {
+  font-size: 0.875rem;
+}
