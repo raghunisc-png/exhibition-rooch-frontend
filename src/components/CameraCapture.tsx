@@ -11,71 +11,130 @@ interface Props {
   onChange: (photo: CapturedPhoto | null) => void;
 }
 
-/**
- * Product photo capture. `capture="environment"` opens the rear camera
- * directly on phones/tablets; on desktop it falls back to a normal file
- * picker. Images are compressed client-side before we ever touch the
- * network or IndexedDB, since booth wifi/data can be slow and photos will
- * often be queued offline.
- */
-export default function CameraCapture({ value, onChange }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [compressing, setCompressing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export default function CameraCapture({
+  value,
+  onChange,
+}: Props) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleFile = async (fileList: FileList | null) => {
+  const [compressing, setCompressing] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const handleFile = async (
+    fileList: FileList | null
+  ) => {
     const raw = fileList?.[0];
+
     if (!raw) return;
+
     setError(null);
     setCompressing(true);
+
     try {
-      const compressed = await imageCompression(raw, {
-        maxSizeMB: 1.2,
-        maxWidthOrHeight: 1600,
-        useWebWorker: true,
-        fileType: "image/jpeg",
+      const compressed = await imageCompression(
+        raw,
+        {
+          maxSizeMB: 1.2,
+          maxWidthOrHeight: 1600,
+          useWebWorker: true,
+          fileType: "image/jpeg",
+        }
+      );
+
+      const file = new File(
+        [compressed],
+        raw.name.replace(/\.\w+$/, ".jpg"),
+        {
+          type: "image/jpeg",
+        }
+      );
+
+      const previewUrl =
+        URL.createObjectURL(file);
+
+      if (value) {
+        URL.revokeObjectURL(value.previewUrl);
+      }
+
+      onChange({
+        file,
+        previewUrl,
       });
-      const file = new File([compressed], raw.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" });
-      const previewUrl = URL.createObjectURL(file);
-      onChange({ file, previewUrl });
     } catch (err) {
-      console.error("Photo compression failed", err);
-      setError("Couldn't process that photo. Please try again.");
+      console.error(
+        "Photo compression failed",
+        err
+      );
+
+      setError(
+        "Couldn't process that photo. Please try again."
+      );
     } finally {
       setCompressing(false);
     }
   };
 
   const clear = () => {
-    if (value) URL.revokeObjectURL(value.previewUrl);
+    if (value) {
+      URL.revokeObjectURL(value.previewUrl);
+    }
+
     onChange(null);
-    if (inputRef.current) inputRef.current.value = "";
+
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
   };
 
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">Product photo</label>
-
       {value ? (
-        <div className="relative w-full max-w-xs overflow-hidden rounded-xl border">
-          <img src={value.previewUrl} alt="Product" className="h-56 w-full object-cover" />
-          <button
-            type="button"
-            onClick={clear}
-            className="absolute right-2 top-2 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white"
-          >
-            Remove
-          </button>
+        <div className="group relative max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+          <img
+            src={value.previewUrl}
+            alt="Product preview"
+            className="h-64 w-full object-cover"
+          />
+
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/70 to-transparent px-4 pb-4 pt-10">
+            <span className="text-xs font-semibold text-white">
+              Product photo
+            </span>
+
+            <button
+              type="button"
+              onClick={clear}
+              className="rounded-lg bg-white/95 px-3 py-2 text-xs font-bold text-red-600 shadow-sm transition hover:bg-white"
+            >
+              Remove
+            </button>
+          </div>
         </div>
       ) : (
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={() =>
+            inputRef.current?.click()
+          }
           disabled={compressing}
-          className="flex h-40 w-full max-w-xs flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 text-gray-500 active:bg-gray-100 disabled:opacity-60"
+          className="flex min-h-44 w-full max-w-md flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center transition hover:border-blue-400 hover:bg-blue-50/40 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <span className="text-3xl">📷</span>
-          <span className="text-sm font-medium">{compressing ? "Processing…" : "Take / choose photo"}</span>
+          <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm ring-1 ring-slate-200">
+            {compressing ? "…" : "📷"}
+          </span>
+
+          <span className="text-sm font-bold text-slate-700">
+            {compressing
+              ? "Processing photo..."
+              : "Take or choose photo"}
+          </span>
+
+          <span className="mt-1 text-xs text-slate-400">
+            JPG or PNG · Automatically compressed
+          </span>
         </button>
       )}
 
@@ -85,10 +144,16 @@ export default function CameraCapture({ value, onChange }: Props) {
         accept="image/*"
         capture="environment"
         className="hidden"
-        onChange={(e) => void handleFile(e.target.files)}
+        onChange={(e) =>
+          void handleFile(e.target.files)
+        }
       />
 
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && (
+        <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

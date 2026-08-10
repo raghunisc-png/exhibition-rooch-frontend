@@ -2,22 +2,821 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =========================================================
+   GLOBAL
+========================================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html,
 body,
 #root {
-  height: 100%;
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
 }
 
-/* Slightly larger tap targets everywhere; this app is used on phones/tablets
-   at a busy booth, often with imprecise touches. */
+html {
+  background: #f8fafc;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+  background: #f8fafc;
+  color: #0f172a;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
 button,
 input,
-select,
 textarea,
+select,
 a {
   -webkit-tap-highlight-color: transparent;
 }
 
-input[type="file"] {
-  font-size: 0.875rem;
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  appearance: textfield;
+}
+
+/* =========================================================
+   PAGE
+========================================================= */
+
+.invoice-page {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.invoice-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.invoice-page-title {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+}
+
+.invoice-page-description {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* =========================================================
+   MAIN LAYOUT
+========================================================= */
+
+.invoice-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  gap: 24px;
+  align-items: start;
+}
+
+.invoice-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.invoice-summary {
+  min-width: 0;
+  position: sticky;
+  top: 92px;
+}
+
+/* =========================================================
+   CARDS
+========================================================= */
+
+.invoice-card {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.03),
+    0 4px 14px rgba(15, 23, 42, 0.03);
+}
+
+.invoice-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.invoice-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.invoice-card-icon {
+  display: flex;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #eff6ff;
+  font-size: 18px;
+}
+
+.invoice-card-icon-dark {
+  background: #0f172a;
+  color: white;
+}
+
+.invoice-card-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.invoice-card-description {
+  margin: 3px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.invoice-card-body {
+  padding: 22px;
+}
+
+/* =========================================================
+   REQUIRED BADGE
+========================================================= */
+
+.required-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* =========================================================
+   FORM
+========================================================= */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.form-full {
+  grid-column: 1 / -1;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 7px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.form-optional {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.invoice-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #dbe3ed;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 12px 14px;
+  color: #0f172a;
+  font-size: 14px;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.invoice-input::placeholder {
+  color: #94a3b8;
+}
+
+.invoice-input:hover {
+  border-color: #cbd5e1;
+}
+
+.invoice-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.invoice-small-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #dbe3ed;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 10px 12px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.invoice-small-input:focus {
+  border-color: #3b82f6;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+textarea.invoice-input {
+  resize: vertical;
+}
+
+/* =========================================================
+   PHOTO
+========================================================= */
+
+.product-photo-wrapper {
+  width: 100%;
+}
+
+.product-photo-wrapper > div {
+  width: 100%;
+}
+
+.product-photo-wrapper button {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.product-photo-wrapper img {
+  width: 100%;
+}
+
+/* =========================================================
+   PRODUCT PRICE MATRIX
+========================================================= */
+
+.product-price-body {
+  padding: 20px 22px 22px;
+}
+
+.product-price-note {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Laptop / Desktop header */
+
+.product-columns-header {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1fr)
+    repeat(5, minmax(78px, 92px))
+    40px;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+
+.product-column-title {
+  padding: 0 0 8px 12px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.product-slot-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding-bottom: 6px;
+}
+
+.product-slot-number {
+  display: flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.product-slot-caption {
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Laptop / Desktop product row */
+
+.product-row {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1fr)
+    repeat(5, minmax(78px, 92px))
+    40px;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid #e8eef5;
+  border-radius: 15px;
+  background: #f8fafc;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.product-row:hover {
+  border-color: #dbe3ed;
+  background: #ffffff;
+  box-shadow:
+    0 2px 6px rgba(15, 23, 42, 0.03),
+    0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.product-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.product-icon {
+  display: flex;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 13px;
+  background: #ffffff;
+  font-size: 20px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.product-name {
+  overflow: hidden;
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-count {
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/*
+  Critical desktop fix:
+  The wrapper does not occupy one grid column.
+  Its five price boxes become direct grid items.
+*/
+.product-prices-mobile-grid {
+  display: contents;
+}
+
+/* Price input */
+
+.price-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  height: 56px;
+  overflow: hidden;
+  border: 2px solid #020617;
+  border-radius: 13px;
+  background: #020617;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.1s ease;
+}
+
+.price-field:hover {
+  border-color: #1e293b;
+}
+
+.price-field:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.price-symbol {
+  position: absolute;
+  left: 9px;
+  z-index: 1;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.price-input {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  padding: 0 7px 0 22px;
+  color: #ffffff;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.price-input::placeholder {
+  color: #475569;
+}
+
+/* Remove product */
+
+.remove-product {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 20px;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.remove-product:hover {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+/* =========================================================
+   ADD PRODUCT
+========================================================= */
+
+.add-product-area {
+  padding: 16px 22px;
+  border-top: 1px solid #f1f5f9;
+  background: #f8fafc;
+}
+
+.add-product-row {
+  display: flex;
+  gap: 10px;
+}
+
+.add-product-button {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 12px;
+  background: #0f172a;
+  padding: 0 20px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.add-product-button:hover {
+  background: #1e293b;
+}
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 1024px) {
+  .invoice-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-summary {
+    position: static;
+  }
+
+  .product-columns-header,
+  .product-row {
+    grid-template-columns:
+      minmax(160px, 1fr)
+      repeat(5, minmax(70px, 1fr))
+      38px;
+    gap: 8px;
+  }
+
+  .price-field {
+    height: 52px;
+  }
+
+  .price-input {
+    font-size: 12px;
+  }
+}
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 640px) {
+  .invoice-page {
+    width: 100%;
+  }
+
+  .invoice-page-header {
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+
+  .invoice-page-title {
+    font-size: 24px;
+  }
+
+  .invoice-page-description {
+    font-size: 12px;
+  }
+
+  .invoice-layout {
+    display: block;
+  }
+
+  .invoice-main {
+    gap: 14px;
+  }
+
+  .invoice-summary {
+    margin-top: 14px;
+  }
+
+  .invoice-card {
+    border-radius: 15px;
+  }
+
+  .invoice-card-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 15px;
+  }
+
+  .invoice-card-body {
+    padding: 15px;
+  }
+
+  .invoice-card-icon {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+  }
+
+  .invoice-card-description {
+    max-width: 100%;
+    font-size: 11px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 13px;
+  }
+
+  .form-full {
+    grid-column: auto;
+  }
+
+  .product-price-note {
+    align-self: flex-start;
+    white-space: normal;
+  }
+
+  .product-price-body {
+    padding: 14px;
+  }
+
+  /*
+    Hide the desktop column header.
+    Each mobile product becomes its own card.
+  */
+  .product-columns-header {
+    display: none;
+  }
+
+  .product-row {
+    display: block;
+    width: 100%;
+    margin-bottom: 12px;
+    padding: 13px;
+    border-radius: 15px;
+    background: #f8fafc;
+  }
+
+  .product-info {
+    width: 100%;
+    margin-bottom: 13px;
+  }
+
+  .product-icon {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    font-size: 19px;
+  }
+
+  .product-name {
+    font-size: 13px;
+  }
+
+  /*
+    Five equal price boxes fit across the product card.
+    No horizontal page scrolling.
+  */
+  .product-prices-mobile-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+  }
+
+  .price-field {
+    width: 100%;
+    min-width: 0;
+    height: 50px;
+    border-radius: 11px;
+  }
+
+  /*
+    Hide currency mark on small screens to give the
+    entered number more room.
+  */
+  .price-symbol {
+    display: none;
+  }
+
+  .price-input {
+    padding: 0 3px;
+    font-size: 11px;
+  }
+
+  .price-input::placeholder {
+    font-size: 11px;
+  }
+
+  .remove-product {
+    width: 100%;
+    height: 34px;
+    margin-top: 10px;
+    border: 1px solid #fee2e2;
+    background: #ffffff;
+    color: #ef4444;
+    font-size: 12px;
+  }
+
+  .remove-product::after {
+    content: " Remove product";
+    margin-left: 4px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .add-product-area {
+    padding: 14px;
+  }
+
+  .add-product-row {
+    flex-direction: column;
+  }
+
+  .add-product-button {
+    min-height: 46px;
+    padding: 12px 16px;
+  }
+
+  .product-photo-wrapper button {
+    min-height: 180px !important;
+  }
+}
+
+/* =========================================================
+   VERY SMALL PHONES - iPhone SE etc.
+========================================================= */
+
+@media (max-width: 390px) {
+  .invoice-card-header {
+    padding: 13px;
+  }
+
+  .invoice-card-body {
+    padding: 13px;
+  }
+
+  .product-price-body {
+    padding: 10px;
+  }
+
+  .product-row {
+    padding: 10px;
+  }
+
+  .product-prices-mobile-grid {
+    gap: 4px;
+  }
+
+  .price-field {
+    height: 46px;
+    border-radius: 9px;
+  }
+
+  .price-input {
+    padding: 0 2px;
+    font-size: 10px;
+  }
 }

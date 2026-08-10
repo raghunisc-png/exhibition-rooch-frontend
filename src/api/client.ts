@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -23,9 +24,11 @@ export function clearToken() {
 
 apiClient.interceptors.request.use((config) => {
   const token = getToken();
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
   return config;
 });
 
@@ -35,12 +38,21 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       clearToken();
     }
+
     return Promise.reject(error);
   }
 );
 
-export function fileUrl(relativeOrAbsolute?: string | null): string | undefined {
-  if (!relativeOrAbsolute) return undefined;
-  if (relativeOrAbsolute.startsWith("http")) return relativeOrAbsolute;
+export function fileUrl(
+  relativeOrAbsolute?: string | null
+): string | undefined {
+  if (!relativeOrAbsolute) {
+    return undefined;
+  }
+
+  if (relativeOrAbsolute.startsWith("http")) {
+    return relativeOrAbsolute;
+  }
+
   return `${API_BASE_URL}/files/${relativeOrAbsolute}`;
 }
