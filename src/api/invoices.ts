@@ -1,68 +1,315 @@
 import { apiClient } from "./client";
 
 import type {
+  GSTBreakup,
   InvoiceFormData,
   InvoiceListItem,
   InvoiceOut,
+  PaymentMode,
 } from "../types";
 
 // ============================================================
-// NORMALIZE API NUMBERS
+// NORMALIZE GST BREAKUP
 // ============================================================
-//
-// FastAPI / SQLAlchemy Decimal values may arrive in JSON as
-// strings. The frontend needs actual numbers for:
-//
-//   .toFixed()
-//   arithmetic
-//   comparisons
-//
-// So we normalize them here in ONE place.
-//
+
+function normalizeGSTBreakup(
+  breakup: any,
+): GSTBreakup {
+  return {
+    gst_rate: Number(
+      breakup?.gst_rate ?? 0,
+    ),
+
+    taxable_value: Number(
+      breakup?.taxable_value ?? 0,
+    ),
+
+    gst_amount: Number(
+      breakup?.gst_amount ?? 0,
+    ),
+
+    cgst_rate: Number(
+      breakup?.cgst_rate ?? 0,
+    ),
+
+    cgst_amount: Number(
+      breakup?.cgst_amount ?? 0,
+    ),
+
+    sgst_rate: Number(
+      breakup?.sgst_rate ?? 0,
+    ),
+
+    sgst_amount: Number(
+      breakup?.sgst_amount ?? 0,
+    ),
+
+    inclusive:
+      breakup?.inclusive !== false,
+  };
+}
+
+// ============================================================
+// NORMALIZE PAYMENT MODE
+// ============================================================
+
+function normalizePaymentMode(
+  value: any,
+): PaymentMode {
+  return value === "cash"
+    ? "cash"
+    : "online";
+}
+
+// ============================================================
+// NORMALIZE BOOLEAN
+// ============================================================
+
+function normalizeBoolean(
+  value: any,
+): boolean {
+  if (
+    typeof value ===
+    "boolean"
+  ) {
+    return value;
+  }
+
+  if (
+    value === "true" ||
+    value === "1" ||
+    value === 1
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+// ============================================================
+// NORMALIZE PHOTO BASE64
+// ============================================================
+
+function normalizePhotoBase64(
+  value: any,
+): string | undefined {
+  if (
+    typeof value !==
+    "string"
+  ) {
+    return undefined;
+  }
+
+  const cleaned =
+    value.trim();
+
+  if (!cleaned) {
+    return undefined;
+  }
+
+  return cleaned;
+}
+
+// ============================================================
+// NORMALIZE PHOTO CONTENT TYPE
+// ============================================================
+
+function normalizePhotoContentType(
+  value: any,
+): string {
+  if (
+    typeof value !==
+      "string" ||
+    !value.trim()
+  ) {
+    return "image/jpeg";
+  }
+
+  return value.trim();
+}
+
+// ============================================================
+// INVOICE LIST ITEM
+// ============================================================
 
 function normalizeInvoiceListItem(
   item: any,
 ): InvoiceListItem {
+  const grandTotal =
+    Number(
+      item.grand_total ??
+        item.total ??
+        0,
+    );
+
   return {
     ...item,
 
-    total: Number(item.total ?? 0),
+    gst_enabled:
+      normalizeBoolean(
+        item.gst_enabled,
+      ),
 
-    quantity: Number(
-      item.quantity ?? 0,
-    ),
+    tax_percent:
+      Number(
+        item.tax_percent ?? 0,
+      ),
+
+    payment_mode:
+      normalizePaymentMode(
+        item.payment_mode,
+      ),
+
+    subtotal:
+      Number(
+        item.subtotal ?? 0,
+      ),
+
+    discount_amount:
+      Number(
+        item.discount_amount ?? 0,
+      ),
+
+    grand_total:
+      grandTotal,
+
+    // Backward compatibility
+    total:
+      grandTotal,
+
+    quantity:
+      Number(
+        item.quantity ?? 0,
+      ),
+
+    created_at:
+      item.created_at,
   };
 }
+
+// ============================================================
+// SINGLE INVOICE
+// ============================================================
 
 function normalizeInvoice(
   invoice: any,
 ): InvoiceOut {
+  const grandTotal =
+    Number(
+      invoice.grand_total ??
+        invoice.total ??
+        0,
+    );
+
+  const gstBreakup =
+    normalizeGSTBreakup(
+      invoice.gst_breakup,
+    );
+
   return {
     ...invoice,
 
-    tax_percent: Number(
-      invoice.tax_percent ?? 0,
-    ),
+    // --------------------------------------------------------
+    // GST
+    // --------------------------------------------------------
 
-    discount_amount: Number(
-      invoice.discount_amount ?? 0,
-    ),
+    gst_enabled:
+      normalizeBoolean(
+        invoice.gst_enabled,
+      ),
 
-    quantity: Number(
-      invoice.quantity ?? 0,
-    ),
+    tax_percent:
+      Number(
+        invoice.tax_percent ?? 0,
+      ),
 
-    subtotal: Number(
-      invoice.subtotal ?? 0,
-    ),
+    taxable_value:
+      Number(
+        invoice.taxable_value ??
+          gstBreakup.taxable_value ??
+          0,
+      ),
 
-    tax_amount: Number(
-      invoice.tax_amount ?? 0,
-    ),
+    tax_amount:
+      Number(
+        invoice.tax_amount ??
+          gstBreakup.gst_amount ??
+          0,
+      ),
 
-    total: Number(
-      invoice.total ?? 0,
-    ),
+    cgst_rate:
+      Number(
+        invoice.cgst_rate ??
+          gstBreakup.cgst_rate ??
+          0,
+      ),
+
+    cgst_amount:
+      Number(
+        invoice.cgst_amount ??
+          gstBreakup.cgst_amount ??
+          0,
+      ),
+
+    sgst_rate:
+      Number(
+        invoice.sgst_rate ??
+          gstBreakup.sgst_rate ??
+          0,
+      ),
+
+    sgst_amount:
+      Number(
+        invoice.sgst_amount ??
+          gstBreakup.sgst_amount ??
+          0,
+      ),
+
+    gst_breakup:
+      gstBreakup,
+
+    // --------------------------------------------------------
+    // DISCOUNT
+    // --------------------------------------------------------
+
+    discount_amount:
+      Number(
+        invoice.discount_amount ??
+          0,
+      ),
+
+    // --------------------------------------------------------
+    // PAYMENT
+    // --------------------------------------------------------
+
+    payment_mode:
+      normalizePaymentMode(
+        invoice.payment_mode,
+      ),
+
+    // --------------------------------------------------------
+    // TOTALS
+    // --------------------------------------------------------
+
+    quantity:
+      Number(
+        invoice.quantity ?? 0,
+      ),
+
+    subtotal:
+      Number(
+        invoice.subtotal ?? 0,
+      ),
+
+    grand_total:
+      grandTotal,
+
+    total:
+      grandTotal,
+
+    // --------------------------------------------------------
+    // ITEMS
+    // --------------------------------------------------------
 
     items: (
       invoice.items ?? []
@@ -71,22 +318,32 @@ function normalizeInvoice(
         ...item,
 
         id:
-          item.id !== undefined
+          item.id !==
+          undefined
             ? Number(item.id)
             : undefined,
 
-        item_number: Number(
-          item.item_number ?? 0,
-        ),
+        item_number:
+          Number(
+            item.item_number ??
+              0,
+          ),
 
-        unit_price: Number(
-          item.unit_price ?? 0,
-        ),
+        unit_price:
+          Number(
+            item.unit_price ??
+              0,
+          ),
       }),
     ),
 
+    // --------------------------------------------------------
+    // MESSAGES
+    // --------------------------------------------------------
+
     messages:
-      invoice.messages ?? [],
+      invoice.messages ??
+      [],
   };
 }
 
@@ -96,7 +353,9 @@ function normalizeInvoice(
 
 export async function fetchInvoices(
   q?: string,
-): Promise<InvoiceListItem[]> {
+): Promise<
+  InvoiceListItem[]
+> {
   const { data } =
     await apiClient.get(
       "/api/invoices",
@@ -156,28 +415,34 @@ export async function resendInvoice(
 /**
  * Create an invoice while online.
  *
- * Backend expects multipart/form-data:
+ * Backend expects multipart/form-data.
  *
- * - customer information
- * - items as JSON
- * - tax
- * - discount
- * - photo
+ * IMPORTANT:
+ *
+ * This function is for direct online invoice creation.
+ *
+ * Offline invoices are handled by syncInvoices().
  */
 
 export async function createInvoiceOnline(
   invoice: InvoiceFormData,
   photoFile: File,
 ): Promise<InvoiceOut> {
-  // ----------------------------------------------------------
-  // Validation
-  // ----------------------------------------------------------
+  // ==========================================================
+  // CUSTOMER VALIDATION
+  // ==========================================================
 
-  if (!invoice.customer_name.trim()) {
+  if (
+    !invoice.customer_name?.trim()
+  ) {
     throw new Error(
       "Customer name is required.",
     );
   }
+
+  // ==========================================================
+  // ITEMS VALIDATION
+  // ==========================================================
 
   if (
     !invoice.items ||
@@ -188,27 +453,74 @@ export async function createInvoiceOnline(
     );
   }
 
-  if (!photoFile) {
+  // ==========================================================
+  // PHOTO VALIDATION
+  // ==========================================================
+
+  if (
+    !photoFile ||
+    !(photoFile instanceof File) ||
+    photoFile.size <= 0
+  ) {
     throw new Error(
       "Product photo is required.",
     );
   }
 
-  // ----------------------------------------------------------
-  // FormData
-  // ----------------------------------------------------------
+  // ==========================================================
+  // PAYMENT MODE
+  // ==========================================================
+
+  const paymentMode =
+    normalizePaymentMode(
+      invoice.payment_mode,
+    );
+
+  // ==========================================================
+  // GST
+  // ==========================================================
+
+  const gstEnabled =
+    normalizeBoolean(
+      invoice.gst_enabled,
+    );
+
+  const gstRate =
+    Number(
+      invoice.tax_percent ?? 0,
+    );
+
+  if (
+    !Number.isFinite(
+      gstRate,
+    ) ||
+    gstRate < 0 ||
+    gstRate > 100
+  ) {
+    throw new Error(
+      "GST percentage must be between 0 and 100.",
+    );
+  }
+
+  // ==========================================================
+  // FORM DATA
+  // ==========================================================
 
   const form =
     new FormData();
 
-  // ----------------------------------------------------------
-  // Customer
-  // ----------------------------------------------------------
+  // ==========================================================
+  // CLIENT UUID
+  // ==========================================================
 
   form.append(
     "client_uuid",
     invoice.client_uuid,
   );
+
+  // ==========================================================
+  // CUSTOMER
+  // ==========================================================
 
   form.append(
     "customer_name",
@@ -233,9 +545,9 @@ export async function createInvoiceOnline(
     );
   }
 
-  // ----------------------------------------------------------
-  // Items
-  // ----------------------------------------------------------
+  // ==========================================================
+  // ITEMS
+  // ==========================================================
 
   form.append(
     "items",
@@ -244,9 +556,9 @@ export async function createInvoiceOnline(
     ),
   );
 
-  // ----------------------------------------------------------
-  // Optional fields
-  // ----------------------------------------------------------
+  // ==========================================================
+  // PRODUCT DESCRIPTION
+  // ==========================================================
 
   if (
     invoice.product_description?.trim()
@@ -257,19 +569,54 @@ export async function createInvoiceOnline(
     );
   }
 
+  // ==========================================================
+  // GST ENABLED
+  // ==========================================================
+
+  form.append(
+    "gst_enabled",
+    String(
+      gstEnabled,
+    ),
+  );
+
+  // ==========================================================
+  // GST RATE
+  // ==========================================================
+
   form.append(
     "tax_percent",
     String(
-      invoice.tax_percent ?? 0,
+      gstEnabled
+        ? gstRate
+        : 0,
     ),
   );
+
+  // ==========================================================
+  // DISCOUNT
+  // ==========================================================
 
   form.append(
     "discount_amount",
     String(
-      invoice.discount_amount ?? 0,
+      invoice.discount_amount ??
+        0,
     ),
   );
+
+  // ==========================================================
+  // PAYMENT MODE
+  // ==========================================================
+
+  form.append(
+    "payment_mode",
+    paymentMode,
+  );
+
+  // ==========================================================
+  // NOTES
+  // ==========================================================
 
   if (
     invoice.notes?.trim()
@@ -280,6 +627,10 @@ export async function createInvoiceOnline(
     );
   }
 
+  // ==========================================================
+  // EXHIBITION
+  // ==========================================================
+
   if (
     invoice.exhibition_name?.trim()
   ) {
@@ -289,33 +640,69 @@ export async function createInvoiceOnline(
     );
   }
 
+  // ==========================================================
+  // CAPTURED AT
+  // ==========================================================
+
   form.append(
     "captured_at",
     invoice.captured_at,
   );
 
-  // ----------------------------------------------------------
-  // Product photo
-  // ----------------------------------------------------------
+  // ==========================================================
+  // PRODUCT PHOTO
+  // ==========================================================
 
   form.append(
     "photo",
     photoFile,
   );
 
-  // ----------------------------------------------------------
-  // Send
-  // ----------------------------------------------------------
-  //
-  // DO NOT manually set Content-Type.
-  // Browser/Axios will add the multipart boundary.
-  //
+  // ==========================================================
+  // DEBUG
+  // ==========================================================
+
+  console.log(
+    "[INVOICE API] Creating online invoice:",
+    {
+      client_uuid:
+        invoice.client_uuid,
+
+      payment_mode:
+        paymentMode,
+
+      gst_enabled:
+        gstEnabled,
+
+      tax_percent:
+        gstEnabled
+          ? gstRate
+          : 0,
+
+      photo_name:
+        photoFile.name,
+
+      photo_type:
+        photoFile.type,
+
+      photo_size:
+        photoFile.size,
+    },
+  );
+
+  // ==========================================================
+  // SEND
+  // ==========================================================
 
   const { data } =
     await apiClient.post(
       "/api/invoices",
       form,
     );
+
+  // ==========================================================
+  // RESPONSE
+  // ==========================================================
 
   return normalizeInvoice(
     data,
@@ -334,9 +721,13 @@ export interface SyncResultItem {
     | "duplicate"
     | "error";
 
-  invoice_id?: number;
+  invoice_id?:
+    | number
+    | null;
 
-  invoice_number?: string;
+  invoice_number?:
+    | string
+    | null;
 
   error?: string;
 }
@@ -345,20 +736,287 @@ export interface SyncResultItem {
 // OFFLINE SYNC
 // ============================================================
 
+/**
+ * Send invoices stored in IndexedDB to:
+ *
+ * POST /api/sync/invoices
+ *
+ * The backend expects:
+ *
+ * {
+ *   items: [
+ *     {
+ *       client_uuid,
+ *       customer_name,
+ *       customer_phone,
+ *       customer_email,
+ *       items,
+ *       gst_enabled,
+ *       tax_percent,
+ *       discount_amount,
+ *       payment_mode,
+ *       notes,
+ *       exhibition_name,
+ *       captured_at,
+ *       photo_base64,
+ *       photo_content_type
+ *     }
+ *   ]
+ * }
+ *
+ * IMPORTANT:
+ *
+ * Offline invoices use Base64 photo data.
+ *
+ * We do NOT use createInvoiceOnline() here because that
+ * endpoint expects multipart/form-data with a File.
+ */
+
 export async function syncInvoices(
   items: InvoiceFormData[],
-): Promise<SyncResultItem[]> {
-  if (!items.length) {
+): Promise<
+  SyncResultItem[]
+> {
+  if (
+    !items ||
+    items.length === 0
+  ) {
     return [];
   }
+
+  // ==========================================================
+  // NORMALIZE + VALIDATE
+  // ==========================================================
+
+  const normalizedItems =
+    items.map(
+      (invoice) => {
+        // ----------------------------------------------------
+        // PAYMENT MODE
+        // ----------------------------------------------------
+
+        const paymentMode =
+          normalizePaymentMode(
+            invoice.payment_mode,
+          );
+
+        // ----------------------------------------------------
+        // GST
+        // ----------------------------------------------------
+
+        const gstEnabled =
+          normalizeBoolean(
+            invoice.gst_enabled,
+          );
+
+        const taxPercent =
+          gstEnabled
+            ? Number(
+                invoice.tax_percent ??
+                  0,
+              )
+            : 0;
+
+        // ----------------------------------------------------
+        // PHOTO
+        // ----------------------------------------------------
+
+        const photoBase64 =
+          normalizePhotoBase64(
+            invoice.photo_base64,
+          );
+
+        const photoContentType =
+          normalizePhotoContentType(
+            invoice.photo_content_type,
+          );
+
+        // ----------------------------------------------------
+        // DEBUG
+        // ----------------------------------------------------
+
+        console.log(
+          "[SYNC] Invoice normalization:",
+          {
+            client_uuid:
+              invoice.client_uuid,
+
+            customer_name:
+              invoice.customer_name,
+
+            payment_mode:
+              paymentMode,
+
+            gst_enabled:
+              gstEnabled,
+
+            tax_percent:
+              taxPercent,
+
+            discount_amount:
+              Number(
+                invoice.discount_amount ??
+                  0,
+              ),
+
+            photo_available:
+              Boolean(
+                photoBase64,
+              ),
+
+            photo_length:
+              photoBase64?.length ??
+              0,
+
+            photo_content_type:
+              photoContentType,
+          },
+        );
+
+        // ----------------------------------------------------
+        // RETURN COMPLETE OBJECT
+        // ----------------------------------------------------
+
+        return {
+          ...invoice,
+
+          // Explicitly preserve payment mode
+          payment_mode:
+            paymentMode,
+
+          // Explicitly preserve GST
+          gst_enabled:
+            gstEnabled,
+
+          tax_percent:
+            taxPercent,
+
+          discount_amount:
+            Number(
+              invoice.discount_amount ??
+                0,
+            ),
+
+          // Explicitly preserve photo
+          photo_base64:
+            photoBase64,
+
+          photo_content_type:
+            photoContentType,
+        };
+      },
+    );
+
+  // ==========================================================
+  // FINAL VALIDATION
+  // ==========================================================
+
+  for (
+    const invoice of normalizedItems
+  ) {
+    const photo =
+      normalizePhotoBase64(
+        invoice.photo_base64,
+      );
+
+    if (!photo) {
+      console.error(
+        "[SYNC] Invoice has no photo_base64:",
+        invoice.client_uuid,
+      );
+
+      throw new Error(
+        `Product photo is missing for invoice ${invoice.client_uuid}.`,
+      );
+    }
+
+    if (
+      !invoice.client_uuid
+    ) {
+      throw new Error(
+        "Invoice client UUID is missing.",
+      );
+    }
+
+    if (
+      !invoice.customer_name?.trim()
+    ) {
+      throw new Error(
+        `Customer name is missing for invoice ${invoice.client_uuid}.`,
+      );
+    }
+
+    if (
+      !invoice.items ||
+      invoice.items.length === 0
+    ) {
+      throw new Error(
+        `Invoice ${invoice.client_uuid} has no items.`,
+      );
+    }
+  }
+
+  // ==========================================================
+  // DEBUG REQUEST
+  // ==========================================================
+
+  console.log(
+    "[SYNC] Sending invoices to backend:",
+    normalizedItems.map(
+      (invoice) => ({
+        client_uuid:
+          invoice.client_uuid,
+
+        payment_mode:
+          invoice.payment_mode,
+
+        gst_enabled:
+          invoice.gst_enabled,
+
+        tax_percent:
+          invoice.tax_percent,
+
+        photo_available:
+          Boolean(
+            invoice.photo_base64,
+          ),
+
+        photo_length:
+          invoice.photo_base64
+            ?.length ??
+          0,
+
+        photo_content_type:
+          invoice.photo_content_type,
+      }),
+    ),
+  );
+
+  // ==========================================================
+  // SEND JSON
+  // ==========================================================
 
   const { data } =
     await apiClient.post(
       "/api/sync/invoices",
       {
-        items,
+        items:
+          normalizedItems,
       },
     );
 
-  return data.results as SyncResultItem[];
+  // ==========================================================
+  // RESPONSE
+  // ==========================================================
+
+  console.log(
+    "[SYNC] Backend response:",
+    data?.results ??
+      data,
+  );
+
+  return (
+    data?.results ??
+    []
+  ) as SyncResultItem[];
 }

@@ -7,15 +7,24 @@ import {
   removePendingInvoice,
 } from "../db/offlineDb";
 
-import type { PendingInvoice } from "../types";
+import type {
+  PendingInvoice,
+} from "../types";
 
 // ============================================================
 // TYPES
 // ============================================================
 
-type Listener = (pendingCount: number) => void;
+type Listener = (
+  pendingCount: number,
+) => void;
 
-const listeners = new Set<Listener>();
+// ============================================================
+// STATE
+// ============================================================
+
+const listeners =
+  new Set<Listener>();
 
 let syncing = false;
 let started = false;
@@ -27,40 +36,202 @@ let started = false;
 export function onSyncStateChange(
   listener: Listener,
 ): () => void {
-  listeners.add(listener);
+  listeners.add(
+    listener,
+  );
 
   return () => {
-    listeners.delete(listener);
+    listeners.delete(
+      listener,
+    );
   };
 }
 
-/**
- * Notify the UI about the number of invoices that still
- * need synchronization.
- *
- * syncing invoices are also counted here so the header does
- * not incorrectly say "All synced" while a request is active.
- */
-async function notify(): Promise<void> {
-  const count = await db.pendingInvoices
-    .where("status")
-    .anyOf([
-      "pending",
-      "failed",
-      "syncing",
-    ])
-    .count();
+// ============================================================
+// NOTIFY UI
+// ============================================================
 
-  listeners.forEach((listener) => {
-    try {
-      listener(count);
-    } catch (error) {
-      console.error(
-        "Sync listener failed:",
-        error,
-      );
-    }
-  });
+async function notify(): Promise<void> {
+  const count =
+    await db.pendingInvoices
+      .where("status")
+      .anyOf([
+        "pending",
+        "failed",
+        "syncing",
+      ])
+      .count();
+
+  listeners.forEach(
+    (listener) => {
+      try {
+        listener(count);
+      } catch (error) {
+        console.error(
+          "[SYNC] Listener failed:",
+          error,
+        );
+      }
+    },
+  );
+}
+
+// ============================================================
+// VALIDATE LOCAL INVOICE
+// ============================================================
+
+/**
+ * Validate an invoice before sending it to the backend.
+ *
+ * IMPORTANT:
+ *
+ * Older invoices may exist in IndexedDB from before
+ * offline photo storage was implemented.
+ *
+ * Those invoices must NOT be sent to the backend because
+ * the backend requires photo_base64.
+ */
+
+async function validateLocalInvoice(
+  invoice: PendingInvoice,
+): Promise<boolean> {
+  // ----------------------------------------------------------
+  // LOCAL ID
+  // ----------------------------------------------------------
+
+  if (
+    invoice.local_id ===
+    undefined
+  ) {
+    console.error(
+      "[SYNC] Invoice has no local_id:",
+      invoice.client_uuid,
+    );
+
+    return false;
+  }
+
+  // ----------------------------------------------------------
+  // CLIENT UUID
+  // ----------------------------------------------------------
+
+  if (
+    !invoice.client_uuid?.trim()
+  ) {
+    await markPendingStatus(
+      invoice.local_id,
+      "failed",
+      "Missing client UUID.",
+    );
+
+    return false;
+  }
+
+  // ----------------------------------------------------------
+  // CUSTOMER
+  // ----------------------------------------------------------
+
+  if (
+    !invoice.customer_name?.trim()
+  ) {
+    await markPendingStatus(
+      invoice.local_id,
+      "failed",
+      "Customer name is missing.",
+    );
+
+    return false;
+  }
+
+  // ----------------------------------------------------------
+  // ITEMS
+  // ----------------------------------------------------------
+
+  if (
+    !Array.isArray(
+      invoice.items,
+    ) ||
+    invoice.items.length === 0
+  ) {
+    await markPendingStatus(
+      invoice.local_id,
+      "failed",
+      "Invoice has no items.",
+    );
+
+    return false;
+  }
+
+  // ----------------------------------------------------------
+  // PHOTO
+  // ----------------------------------------------------------
+
+  const photoBase64 =
+    typeof invoice.photo_base64 ===
+    "string"
+      ? invoice.photo_base64.trim()
+      : "";
+
+  if (!photoBase64) {
+    /**
+     * This is most likely an old invoice created before
+     * offline photo persistence was fixed.
+     *
+     * DO NOT send it to the backend.
+     *
+     * Otherwise backend responds:
+     *
+     * "Product photo is required."
+     */
+
+    await markPendingStatus(
+      invoice.local_id,
+      "failed",
+      "Product photo is missing. This invoice was created before offline photo storage was fixed. Please create the invoice again with the product photo.",
+    );
+
+    console.warn(
+      "[SYNC] Skipping invoice without photo:",
+      invoice.client_uuid,
+    );
+
+    return false;
+  }
+
+  // ----------------------------------------------------------
+  // PHOTO CONTENT TYPE
+  // ----------------------------------------------------------
+
+  const contentType =
+    invoice.photo_content_type?.trim() ||
+    "image/jpeg";
+
+  const allowedTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+  ];
+
+  if (
+    !allowedTypes.includes(
+      contentType.toLowerCase(),
+    )
+  ) {
+    await markPendingStatus(
+      invoice.local_id,
+      "failed",
+      `Unsupported product photo type: ${contentType}`,
+    );
+
+    return false;
+  }
+
+  // ----------------------------------------------------------
+  // VALID
+  // ----------------------------------------------------------
+
+  return true;
 }
 
 // ============================================================
@@ -73,58 +244,76 @@ async function notify(): Promise<void> {
  * Flow:
  *
  * IndexedDB
- *     ↓
- * mark syncing
- *     ↓
- * POST /api/sync/invoices
- *     ↓
- * created / duplicate
- *     ↓
- * delete local record
- *
- * If the request fails:
- *
+ *      ↓
+ * pending / failed
+ *      ↓
+ * local validation
+ *      ↓
  * syncing
- *     ↓
- * pending
- *     ↓
- * retry later
+ *      ↓
+ * POST /api/sync/invoices
+ *      ↓
+ * created / duplicate / error
+ *      ↓
+ * delete OR failed
+ *
+ * IMPORTANT:
+ *
+ * The photo is validated locally before the request is sent.
+ *
+ * This prevents the backend from repeatedly receiving
+ * invalid legacy invoices.
  */
+
 export async function runSync(): Promise<void> {
-  // ----------------------------------------------------------
-  // Prevent multiple simultaneous sync operations.
-  // ----------------------------------------------------------
+  // ==========================================================
+  // PREVENT SIMULTANEOUS SYNC
+  // ==========================================================
 
   if (syncing) {
     return;
   }
 
-  // ----------------------------------------------------------
-  // Cannot synchronize while offline.
-  // ----------------------------------------------------------
+  // ==========================================================
+  // OFFLINE
+  // ==========================================================
 
   if (!navigator.onLine) {
+    console.log(
+      "[SYNC] Browser is offline. Sync skipped.",
+    );
+
     return;
   }
 
   syncing = true;
 
   try {
-    // --------------------------------------------------------
-    // Get pending invoices.
-    // --------------------------------------------------------
+    // ========================================================
+    // GET LOCAL INVOICES
+    // ========================================================
 
     const allPending =
       await getPendingInvoices();
 
-    const pending: PendingInvoice[] =
+    // ========================================================
+    // ONLY PROCESS PENDING / FAILED
+    // ========================================================
+
+    const pending:
+      PendingInvoice[] =
       allPending.filter(
         (invoice) =>
-          invoice.status === "pending" ||
-          invoice.status === "failed",
+          invoice.status ===
+            "pending" ||
+          invoice.status ===
+            "failed",
       );
 
-    if (pending.length === 0) {
+    if (
+      pending.length ===
+      0
+    ) {
       return;
     }
 
@@ -132,12 +321,58 @@ export async function runSync(): Promise<void> {
       `[SYNC] Starting sync for ${pending.length} invoice(s)`,
     );
 
-    // --------------------------------------------------------
-    // Mark invoices as syncing.
-    // --------------------------------------------------------
+    // ========================================================
+    // VALIDATE LOCAL INVOICES
+    // ========================================================
 
-    for (const invoice of pending) {
-      if (invoice.local_id === undefined) {
+    const validPending:
+      PendingInvoice[] = [];
+
+    for (
+      const invoice of pending
+    ) {
+      const valid =
+        await validateLocalInvoice(
+          invoice,
+        );
+
+      if (valid) {
+        validPending.push(
+          invoice,
+        );
+      }
+    }
+
+    // ========================================================
+    // NOTHING VALID TO SEND
+    // ========================================================
+
+    if (
+      validPending.length ===
+      0
+    ) {
+      console.log(
+        "[SYNC] No valid invoices available for synchronization.",
+      );
+
+      return;
+    }
+
+    console.log(
+      `[SYNC] ${validPending.length} valid invoice(s) ready for sync.`,
+    );
+
+    // ========================================================
+    // MARK VALID INVOICES AS SYNCING
+    // ========================================================
+
+    for (
+      const invoice of validPending
+    ) {
+      if (
+        invoice.local_id ===
+        undefined
+      ) {
         continue;
       }
 
@@ -148,36 +383,86 @@ export async function runSync(): Promise<void> {
       );
     }
 
-    // IMPORTANT:
-    //
-    // Notify AFTER marking syncing.
-    //
-    // The UI now correctly knows that synchronization is
-    // actually happening.
+    // ========================================================
+    // UPDATE UI
+    // ========================================================
+
     await notify();
 
-    // --------------------------------------------------------
-    // Send invoices to backend.
-    // --------------------------------------------------------
+    // ========================================================
+    // DEBUG INFORMATION
+    // ========================================================
 
     console.log(
       "[SYNC] Sending invoices to backend:",
-      pending.map(
-        (invoice) => invoice.client_uuid,
+      validPending.map(
+        (invoice) => ({
+          local_id:
+            invoice.local_id,
+
+          client_uuid:
+            invoice.client_uuid,
+
+          customer_name:
+            invoice.customer_name,
+
+          payment_mode:
+            invoice.payment_mode,
+
+          gst_enabled:
+            invoice.gst_enabled,
+
+          tax_percent:
+            invoice.tax_percent,
+
+          discount_amount:
+            invoice.discount_amount,
+
+          grand_total:
+            invoice.grand_total,
+
+          item_count:
+            invoice.items?.length ??
+            0,
+
+          photo_available:
+            Boolean(
+              invoice.photo_base64,
+            ),
+
+          photo_length:
+            invoice.photo_base64
+              ?.length ??
+            0,
+
+          photo_content_type:
+            invoice.photo_content_type ||
+            "image/jpeg",
+        }),
       ),
     );
 
+    // ========================================================
+    // SEND TO BACKEND
+    // ========================================================
+
+    console.log(
+      "[SYNC] Using offline sync endpoint /api/sync/invoices",
+    );
+
     const results =
-      await syncInvoices(pending);
+      await syncInvoices(
+        validPending,
+      );
 
     console.log(
       "[SYNC] Backend response:",
       results,
     );
 
-    // --------------------------------------------------------
-    // Create lookup by client UUID.
-    // --------------------------------------------------------
+    // ========================================================
+    // CREATE RESULT LOOKUP
+    // ========================================================
 
     const resultByUuid =
       new Map(
@@ -189,12 +474,17 @@ export async function runSync(): Promise<void> {
         ),
       );
 
-    // --------------------------------------------------------
-    // Process every invoice.
-    // --------------------------------------------------------
+    // ========================================================
+    // PROCESS EACH INVOICE
+    // ========================================================
 
-    for (const invoice of pending) {
-      if (invoice.local_id === undefined) {
+    for (
+      const invoice of validPending
+    ) {
+      if (
+        invoice.local_id ===
+        undefined
+      ) {
         continue;
       }
 
@@ -209,69 +499,79 @@ export async function runSync(): Promise<void> {
         result,
       );
 
-      // ------------------------------------------------------
-      // Successfully created on server.
-      // ------------------------------------------------------
+      // ======================================================
+      // CREATED
+      // ======================================================
 
       if (
-        result?.status === "created"
+        result?.status ===
+        "created"
       ) {
         await removePendingInvoice(
           invoice.local_id,
         );
 
         console.log(
-          "[SYNC] Removed locally after creation:",
+          "[SYNC] Invoice created successfully:",
           invoice.client_uuid,
+          result.invoice_number,
         );
 
         continue;
       }
 
-      // ------------------------------------------------------
-      // Server says invoice already exists.
-      //
-      // This is also success because the invoice does not
-      // need to remain in IndexedDB.
-      // ------------------------------------------------------
+      // ======================================================
+      // DUPLICATE
+      // ======================================================
 
       if (
-        result?.status === "duplicate"
+        result?.status ===
+        "duplicate"
       ) {
+        /**
+         * Duplicate is treated as SUCCESS.
+         *
+         * The backend already has the invoice.
+         */
+
         await removePendingInvoice(
           invoice.local_id,
         );
 
         console.log(
-          "[SYNC] Removed local duplicate:",
+          "[SYNC] Duplicate invoice removed from local queue:",
           invoice.client_uuid,
         );
 
         continue;
       }
 
-      // ------------------------------------------------------
-      // Backend explicitly returned an error.
-      // ------------------------------------------------------
+      // ======================================================
+      // BACKEND ERROR
+      // ======================================================
+
+      const errorMessage =
+        result?.error ||
+        "Invoice synchronization failed.";
 
       await markPendingStatus(
         invoice.local_id,
         "failed",
-        result?.error ||
-          "Sync failed",
+        errorMessage,
       );
 
       console.error(
         "[SYNC] Invoice failed:",
         invoice.client_uuid,
-        result?.error,
+        errorMessage,
       );
     }
-
-  } catch (err: unknown) {
-    // --------------------------------------------------------
-    // Network-level failure.
-    // --------------------------------------------------------
+  } catch (
+    err: unknown
+  ) {
+    // ========================================================
+    // NETWORK / REQUEST FAILURE
+    // ========================================================
 
     const message =
       err instanceof Error
@@ -283,34 +583,29 @@ export async function runSync(): Promise<void> {
       err,
     );
 
-    /*
-     * IMPORTANT:
-     *
-     * Never delete invoices here.
-     *
-     * The request might have reached the backend even though
-     * the browser did not receive the response.
-     *
-     * client_uuid provides idempotency:
-     *
-     * retry
-     *   ↓
-     * same client_uuid
-     *   ↓
-     * backend finds invoice
-     *   ↓
-     * duplicate
-     *   ↓
-     * remove local invoice
-     */
+    // ========================================================
+    // IMPORTANT
+    // ========================================================
+    //
+    // NEVER DELETE invoices here.
+    //
+    // The request may have reached the backend even if
+    // the browser did not receive the response.
+    //
+    // client_uuid protects against duplicate invoices.
+    //
 
     const pending =
       await getPendingInvoices();
 
-    for (const invoice of pending) {
+    for (
+      const invoice of pending
+    ) {
       if (
-        invoice.local_id !== undefined &&
-        invoice.status === "syncing"
+        invoice.local_id !==
+          undefined &&
+        invoice.status ===
+          "syncing"
       ) {
         await markPendingStatus(
           invoice.local_id,
@@ -319,18 +614,12 @@ export async function runSync(): Promise<void> {
         );
       }
     }
-
   } finally {
-    syncing = false;
+    // ========================================================
+    // FINISH
+    // ========================================================
 
-    // --------------------------------------------------------
-    // Notify ONLY after the complete sync operation finishes.
-    //
-    // This is important.
-    //
-    // It prevents the UI from receiving multiple overlapping
-    // states and displaying an old "syncing" record.
-    // --------------------------------------------------------
+    syncing = false;
 
     await notify();
 
@@ -347,23 +636,28 @@ export async function runSync(): Promise<void> {
 /**
  * Start automatic synchronization.
  *
- * Sync happens:
+ * Sync occurs:
  *
- * 1. When application starts
- * 2. When browser comes back online
- * 3. When browser/tab becomes visible
+ * 1. Application startup
+ * 2. Browser comes back online
+ * 3. Browser/tab becomes visible
  * 4. Every 30 seconds
  */
+
 export function startAutoSync(): void {
+  // ==========================================================
+  // PREVENT DUPLICATE EVENT LISTENERS
+  // ==========================================================
+
   if (started) {
     return;
   }
 
   started = true;
 
-  // ----------------------------------------------------------
-  // Browser comes back online.
-  // ----------------------------------------------------------
+  // ==========================================================
+  // ONLINE
+  // ==========================================================
 
   window.addEventListener(
     "online",
@@ -376,9 +670,9 @@ export function startAutoSync(): void {
     },
   );
 
-  // ----------------------------------------------------------
-  // Browser goes offline.
-  // ----------------------------------------------------------
+  // ==========================================================
+  // OFFLINE
+  // ==========================================================
 
   window.addEventListener(
     "offline",
@@ -389,9 +683,9 @@ export function startAutoSync(): void {
     },
   );
 
-  // ----------------------------------------------------------
-  // App/tab becomes visible.
-  // ----------------------------------------------------------
+  // ==========================================================
+  // VISIBILITY
+  // ==========================================================
 
   document.addEventListener(
     "visibilitychange",
@@ -405,9 +699,9 @@ export function startAutoSync(): void {
     },
   );
 
-  // ----------------------------------------------------------
-  // Periodic retry.
-  // ----------------------------------------------------------
+  // ==========================================================
+  // PERIODIC RETRY
+  // ==========================================================
 
   window.setInterval(
     () => {
@@ -416,9 +710,9 @@ export function startAutoSync(): void {
     30_000,
   );
 
-  // ----------------------------------------------------------
-  // Initial synchronization.
-  // ----------------------------------------------------------
+  // ==========================================================
+  // INITIAL SYNC
+  // ==========================================================
 
   void runSync();
 }

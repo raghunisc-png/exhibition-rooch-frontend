@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Link } from "react-router-dom";
 
 import { fetchInvoices } from "../api/invoices";
@@ -89,7 +94,6 @@ export default function InvoiceList() {
         if (!q) {
           await cacheInvoiceList(data);
         }
-
       } catch (error) {
         console.error(
           "Failed to load invoices:",
@@ -107,7 +111,6 @@ export default function InvoiceList() {
 
           setInvoices(cached);
           setOfflineNotice(true);
-
         } catch (cacheError) {
           console.error(
             "Failed to load cached invoices:",
@@ -117,7 +120,6 @@ export default function InvoiceList() {
           setInvoices([]);
           setOfflineNotice(true);
         }
-
       } finally {
         setLoading(false);
       }
@@ -176,6 +178,7 @@ export default function InvoiceList() {
         //
         // This is important because runSync() may have deleted
         // invoices from IndexedDB.
+
         await loadPending();
         await loadInvoices();
       };
@@ -240,6 +243,145 @@ export default function InvoiceList() {
         query.trim() || undefined,
       );
     };
+
+  // ==========================================================
+  // GROUP SERVER INVOICES BY DATE
+  // ==========================================================
+
+  const groupedInvoices = useMemo(() => {
+    const groups: Record<
+      string,
+      InvoiceListItem[]
+    > = {};
+
+    invoices.forEach(
+      (invoice) => {
+        const date =
+          new Date(
+            invoice.created_at,
+          );
+
+        // ----------------------------------------------------
+        // Use local calendar date for grouping.
+        //
+        // Example:
+        // 12-Aug-2026
+        // ----------------------------------------------------
+
+        const year =
+          date.getFullYear();
+
+        const month =
+          String(
+            date.getMonth() + 1,
+          ).padStart(2, "0");
+
+        const day =
+          String(
+            date.getDate(),
+          ).padStart(2, "0");
+
+        const dateKey =
+          `${year}-${month}-${day}`;
+
+        if (!groups[dateKey]) {
+          groups[dateKey] = [];
+        }
+
+        groups[dateKey].push(
+          invoice,
+        );
+      },
+    );
+
+    // --------------------------------------------------------
+    // Convert object to array and sort newest date first.
+    // --------------------------------------------------------
+
+    return Object.entries(groups)
+      .sort(
+        (
+          [dateA],
+          [dateB],
+        ) =>
+          dateB.localeCompare(
+            dateA,
+          ),
+      )
+      .map(
+        ([
+          dateKey,
+          dateInvoices,
+        ]) => {
+          const total =
+            dateInvoices.reduce(
+              (
+                sum,
+                invoice,
+              ) =>
+                sum +
+                Number(
+                  invoice.grand_total ??
+                    invoice.total ??
+                    0,
+                ),
+              0,
+            );
+
+          return {
+            dateKey,
+            invoices:
+              dateInvoices,
+            total,
+          };
+        },
+      );
+  }, [invoices]);
+
+  // ==========================================================
+  // FORMAT DATE HEADING
+  // ==========================================================
+
+  const formatDateHeading =
+    (
+      dateKey: string,
+    ) => {
+      const [
+        year,
+        month,
+        day,
+      ] = dateKey
+        .split("-")
+        .map(Number);
+
+      const date =
+        new Date(
+          year,
+          month - 1,
+          day,
+        );
+
+      return date.toLocaleDateString(
+        "en-GB",
+        {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        },
+      );
+    };
+
+  // ==========================================================
+  // MONEY FORMATTER
+  // ==========================================================
+
+  const formatMoney =
+    (
+      value: number,
+    ) =>
+      `₹${Number(
+        value || 0,
+      ).toFixed(2)}`;
 
   // ==========================================================
   // RENDER
@@ -324,7 +466,6 @@ export default function InvoiceList() {
           </div>
 
           <div className="space-y-2">
-
             {pending.map(
               (invoice) => {
                 const itemCount =
@@ -349,6 +490,7 @@ export default function InvoiceList() {
                     <div className="flex items-center justify-between gap-3">
 
                       {/* Customer */}
+
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-gray-900">
                           {
@@ -368,6 +510,7 @@ export default function InvoiceList() {
                         </p>
 
                         {/* Error */}
+
                         {invoice.last_error && (
                           <p className="mt-1 truncate text-xs text-red-600">
                             {
@@ -378,6 +521,7 @@ export default function InvoiceList() {
                       </div>
 
                       {/* Status */}
+
                       <span
                         className={`
                           shrink-0 rounded-full px-2 py-1
@@ -400,7 +544,6 @@ export default function InvoiceList() {
                 );
               },
             )}
-
           </div>
         </div>
       )}
@@ -444,70 +587,146 @@ export default function InvoiceList() {
 
       {!loading &&
         invoices.length > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-5">
 
-            {invoices.map(
-              (invoice) => (
-                <Link
-                  key={invoice.id}
-                  to={`/invoices/${invoice.id}`}
-                  className="block rounded-xl bg-white px-4 py-3 shadow-sm transition active:bg-gray-50"
+            {groupedInvoices.map(
+              ({
+                dateKey,
+                invoices:
+                  dateInvoices,
+                total,
+              }) => (
+                <section
+                  key={dateKey}
+                  className="space-y-2"
                 >
-                  <div className="flex items-center justify-between gap-3">
 
-                    {/* Left */}
-                    <div className="min-w-0">
+                  {/* =================================================
+                      DATE HEADER
+                      ================================================= */}
 
-                      <p className="truncate text-sm font-medium text-gray-900">
-                        {
-                          invoice.customer_name
-                        }
-                      </p>
-
-                      <p className="truncate text-xs text-gray-500">
-                        {invoice.quantity}{" "}
-                        {invoice.quantity ===
-                        1
-                          ? "item"
-                          : "items"}
-
-                        {" · "}
-
-                        {
-                          invoice.invoice_number
-                        }
-                      </p>
-
-                      {invoice.customer_phone && (
-                        <p className="mt-0.5 truncate text-xs text-gray-400">
-                          {
-                            invoice.customer_phone
-                          }
-                        </p>
+                  <div className="flex items-center justify-between px-1">
+                    <h2 className="text-sm font-semibold text-gray-800">
+                      {formatDateHeading(
+                        dateKey,
                       )}
+                    </h2>
 
-                    </div>
+                    <span className="text-xs font-medium text-gray-500">
+                      {dateInvoices.length}{" "}
+                      {dateInvoices.length ===
+                      1
+                        ? "invoice"
+                        : "invoices"}
+                    </span>
+                  </div>
 
-                    {/* Right */}
-                    <div className="shrink-0 text-right">
+                  {/* =================================================
+                      INVOICES FOR THIS DATE
+                      ================================================= */}
 
-                      <p className="text-sm font-semibold text-gray-900">
-                        ₹
-                        {Number(
-                          invoice.total,
-                        ).toFixed(2)}
-                      </p>
+                  <div className="space-y-2">
+                    {dateInvoices.map(
+                      (invoice) => (
+                        <Link
+                          key={
+                            invoice.id
+                          }
+                          to={`/invoices/${invoice.id}`}
+                          className="block rounded-xl bg-white px-4 py-3 shadow-sm transition active:bg-gray-50"
+                        >
+                          <div className="flex items-center justify-between gap-3">
 
-                      <p className="text-[11px] text-gray-400">
-                        {new Date(
-                          invoice.created_at,
-                        ).toLocaleDateString()}
-                      </p>
+                            {/* Left */}
 
-                    </div>
+                            <div className="min-w-0">
+
+                              <p className="truncate text-sm font-medium text-gray-900">
+                                {
+                                  invoice.customer_name
+                                }
+                              </p>
+
+                              <p className="truncate text-xs text-gray-500">
+                                {
+                                  invoice.quantity
+                                }{" "}
+                                {
+                                  invoice.quantity ===
+                                  1
+                                    ? "item"
+                                    : "items"
+                                }
+
+                                {" · "}
+
+                                {
+                                  invoice.invoice_number
+                                }
+                              </p>
+
+                              {invoice.customer_phone && (
+                                <p className="mt-0.5 truncate text-xs text-gray-400">
+                                  {
+                                    invoice.customer_phone
+                                  }
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Right */}
+
+                            <div className="shrink-0 text-right">
+
+                              <p className="text-sm font-semibold text-gray-900">
+                                {formatMoney(
+                                  Number(
+                                    invoice.grand_total ??
+                                      invoice.total ??
+                                      0,
+                                  ),
+                                )}
+                              </p>
+
+                              <p className="text-[11px] text-gray-400">
+                                {new Date(
+                                  invoice.created_at,
+                                ).toLocaleTimeString(
+                                  "en-IN",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  },
+                                )}
+                              </p>
+
+                            </div>
+
+                          </div>
+                        </Link>
+                      ),
+                    )}
+                  </div>
+
+                  {/* =================================================
+                      DAILY TOTAL
+                      ================================================= */}
+
+                  <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+
+                    <span className="text-sm font-semibold text-gray-700">
+                      Total
+                    </span>
+
+                    <span className="text-sm font-bold text-gray-900">
+                      {formatMoney(
+                        total,
+                      )}
+                    </span>
 
                   </div>
-                </Link>
+
+                </section>
               ),
             )}
 

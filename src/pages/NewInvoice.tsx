@@ -1,5 +1,14 @@
-import { FormEvent, useMemo, useState } from "react";
+import React, {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
 import { useNavigate } from "react-router-dom";
+
+import { useAuth } from "../context/AuthContext";
 
 import CameraCapture, {
   CapturedPhoto,
@@ -18,12 +27,12 @@ import {
 } from "../sync/syncManager";
 
 import type {
+  DiscountMode,
   InvoiceFormData,
 } from "../types";
 
-
 // ============================================================
-// PRODUCT TYPES
+// TYPES
 // ============================================================
 
 type Product = {
@@ -37,12 +46,17 @@ type ProductPrices = Record<
   Record<number, string>
 >;
 
-
 // ============================================================
 // CONSTANTS
 // ============================================================
 
-const PRODUCT_SLOTS = [1, 2, 3, 4, 5];
+const PRODUCT_SLOTS = [
+  1,
+  2,
+  3,
+  4,
+  5,
+];
 
 const INITIAL_PRODUCTS: Product[] = [
   {
@@ -58,60 +72,69 @@ const INITIAL_PRODUCTS: Product[] = [
   {
     id: "bracelet",
     name: "Bracelet",
-    icon: "🧿",
+    icon: "✨",
   },
   {
     id: "earrings",
     name: "Earrings",
-    icon: "👂",
+    icon: "◇",
   },
   {
     id: "anklets",
     name: "Anklets",
-    icon: "👣",
+    icon: "✦",
   },
   {
     id: "sets",
     name: "Sets",
-    icon: "✨",
+    icon: "◆",
   },
 ];
-
 
 // ============================================================
 // HELPERS
 // ============================================================
 
-const createEmptyPrices = (): ProductPrices => {
+function createEmptyPrices(): ProductPrices {
   const result: ProductPrices = {};
 
-  INITIAL_PRODUCTS.forEach(
-    (product) => {
-      result[product.id] = {};
+  INITIAL_PRODUCTS.forEach((product) => {
+    result[product.id] = {};
 
-      PRODUCT_SLOTS.forEach(
-        (slot) => {
-          result[product.id][slot] = "";
-        },
-      );
-    },
-  );
+    PRODUCT_SLOTS.forEach((slot) => {
+      result[product.id][slot] = "";
+    });
+  });
 
   return result;
-};
-
-
-function newClientUuid(): string {
-  return crypto.randomUUID();
 }
 
+function createEmptyProductPrices(): Record<
+  number,
+  string
+> {
+  const result: Record<number, string> = {};
 
-/**
- * Convert the product photo to base64.
- *
- * This is only needed when the invoice has to be stored
- * offline in IndexedDB.
- */
+  PRODUCT_SLOTS.forEach((slot) => {
+    result[slot] = "";
+  });
+
+  return result;
+}
+
+function newClientUuid(): string {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+}
+
 function fileToBase64(
   file: File,
 ): Promise<string> {
@@ -124,18 +147,28 @@ function fileToBase64(
         const result =
           reader.result as string;
 
+        const parts =
+          result.split(",");
+
         resolve(
-          result.split(",")[1],
+          parts.length > 1
+            ? parts[1]
+            : result,
         );
       };
 
-      reader.onerror = reject;
+      reader.onerror = () => {
+        reject(
+          new Error(
+            "Unable to read photo.",
+          ),
+        );
+      };
 
       reader.readAsDataURL(file);
     },
   );
 }
-
 
 // ============================================================
 // COMPONENT
@@ -145,90 +178,153 @@ export default function NewInvoice() {
   const navigate =
     useNavigate();
 
-  // ----------------------------------------------------------
-  // Customer
-  // ----------------------------------------------------------
+  const {
+    gstEnabled,
+    gstRate,
+    setGstEnabled,
+    setGstRate,
+  } = useAuth();
 
-  const [customerName, setCustomerName] =
-    useState("");
+  // GST must start OFF when a new invoice screen is opened.
+  // The setter from AuthContext may get a new function identity when
+  // the context updates. A ref makes sure this reset happens ONLY ONCE
+  // for this mounted NewInvoice screen, so clicking the GST toggle to
+  // ON is not immediately reset back to OFF.
+  const gstInitialisedRef = useRef(false);
 
-  const [customerPhone, setCustomerPhone] =
-    useState("");
+  useEffect(() => {
+    if (gstInitialisedRef.current) {
+      return;
+    }
 
-  const [customerEmail, setCustomerEmail] =
-    useState("");
-
-
-  // ----------------------------------------------------------
-  // Products
-  // ----------------------------------------------------------
-
-  const [products, setProducts] =
-    useState<Product[]>(
-      INITIAL_PRODUCTS,
-    );
-
-  const [prices, setPrices] =
-    useState<ProductPrices>(
-      createEmptyPrices,
-    );
-
-
-  // ----------------------------------------------------------
-  // Invoice values
-  // ----------------------------------------------------------
-
-  const [taxPercent, setTaxPercent] =
-    useState("0");
-
-  const [discountAmount, setDiscountAmount] =
-    useState("0");
-
-  const [exhibitionName, setExhibitionName] =
-    useState("");
-
-  const [notes, setNotes] =
-    useState("");
-
-
-  // ----------------------------------------------------------
-  // Photo
-  // ----------------------------------------------------------
-
-  const [photo, setPhoto] =
-    useState<CapturedPhoto | null>(
-      null,
-    );
-
-
-  // ----------------------------------------------------------
-  // Add product
-  // ----------------------------------------------------------
-
-  const [newProductName, setNewProductName] =
-    useState("");
-
-
-  // ----------------------------------------------------------
-  // Submission state
-  // ----------------------------------------------------------
-
-  const [submitting, setSubmitting] =
-    useState(false);
-
-  const [error, setError] =
-    useState<string | null>(
-      null,
-    );
-
-  const [successMessage, setSuccessMessage] =
-    useState<string | null>(
-      null,
-    );
-
+    gstInitialisedRef.current = true;
+    setGstEnabled(false);
+  }, [setGstEnabled]);
 
   // ==========================================================
-  // PRICE UPDATE
+  // CUSTOMER
+  // ==========================================================
+
+  const [
+    customerName,
+    setCustomerName,
+  ] = useState("");
+
+  const [
+    customerPhone,
+    setCustomerPhone,
+  ] = useState("+91 ");
+
+  const [
+    customerEmail,
+    setCustomerEmail,
+  ] = useState("");
+
+  // ==========================================================
+  // PRODUCTS
+  // ==========================================================
+
+  const [
+    products,
+    setProducts,
+  ] = useState<Product[]>(
+    INITIAL_PRODUCTS,
+  );
+
+  const [
+    prices,
+    setPrices,
+  ] = useState<ProductPrices>(
+    createEmptyPrices,
+  );
+
+  // ==========================================================
+  // INVOICE DETAILS
+  // ==========================================================
+
+  const [
+    discountAmount,
+    setDiscountAmount,
+  ] = useState("0");
+
+  const [
+    discountMode,
+    setDiscountMode,
+  ] = useState<DiscountMode>(
+    "amount",
+  );
+
+  const [
+    discountPercentage,
+    setDiscountPercentage,
+  ] = useState("0");
+
+  const [
+    exhibitionName,
+    setExhibitionName,
+  ] = useState("");
+
+  const [
+    notes,
+    setNotes,
+  ] = useState("");
+
+  // ==========================================================
+  // PAYMENT
+  // ==========================================================
+
+  const [
+    paymentMode,
+    setPaymentMode,
+  ] = useState<
+    "online" | "cash"
+  >("online");
+
+  // ==========================================================
+  // PHOTO
+  // ==========================================================
+
+  const [
+    photo,
+    setPhoto,
+  ] = useState<CapturedPhoto | null>(
+    null,
+  );
+
+  // ==========================================================
+  // ADD PRODUCT
+  // ==========================================================
+
+  const [
+    newProductName,
+    setNewProductName,
+  ] = useState("");
+
+  // ==========================================================
+  // SUBMIT
+  // ==========================================================
+
+  const [
+    submitting,
+    setSubmitting,
+  ] = useState(false);
+
+  const [
+    error,
+    setError,
+  ] = useState<string | null>(
+    null,
+  );
+
+  const [
+    successMessage,
+    setSuccessMessage,
+  ] = useState<string | null>(
+    null,
+  );
+
+  // ==========================================================
+  // UPDATE PRICE
   // ==========================================================
 
   const updatePrice = (
@@ -257,7 +353,6 @@ export default function NewInvoice() {
     );
   };
 
-
   // ==========================================================
   // ADD PRODUCT
   // ==========================================================
@@ -281,7 +376,7 @@ export default function NewInvoice() {
     const newProduct: Product = {
       id,
       name,
-      icon: "＋",
+      icon: "✦",
     };
 
     setProducts(
@@ -296,29 +391,24 @@ export default function NewInvoice() {
         ...current,
 
         [id]:
-          PRODUCT_SLOTS.reduce(
-            (
-              acc,
-              slot,
-            ) => {
-              acc[slot] = "";
-              return acc;
-            },
-            {} as Record<
-              number,
-              string
-            >,
-          ),
+          createEmptyProductPrices(),
       }),
     );
 
     setNewProductName("");
   };
 
-
   // ==========================================================
   // REMOVE PRODUCT
   // ==========================================================
+
+  const isInitialProduct = (
+    productId: string,
+  ) =>
+    INITIAL_PRODUCTS.some(
+      (initialProduct) =>
+        initialProduct.id === productId,
+    );
 
   const removeProduct = (
     productId: string,
@@ -346,7 +436,6 @@ export default function NewInvoice() {
       },
     );
   };
-
 
   // ==========================================================
   // SELECTED ITEMS
@@ -384,9 +473,15 @@ export default function NewInvoice() {
                 );
 
               if (
-                Number.isNaN(
+                !Number.isFinite(
                   numericValue,
                 )
+              ) {
+                return;
+              }
+
+              if (
+                numericValue < 0
               ) {
                 return;
               }
@@ -417,13 +512,16 @@ export default function NewInvoice() {
       prices,
     ]);
 
-
   // ==========================================================
-  // TOTALS
+  // QUANTITY
   // ==========================================================
 
   const totalQuantity =
     selectedItems.length;
+
+  // ==========================================================
+  // SUBTOTAL
+  // ==========================================================
 
   const subtotal =
     useMemo(
@@ -440,39 +538,178 @@ export default function NewInvoice() {
       [selectedItems],
     );
 
-  const taxAmount =
-    useMemo(() => {
-      const tax =
-        Number(
-          taxPercent,
-        ) || 0;
+  // ==========================================================
+  // GST RATE
+  // ==========================================================
 
-      return (
-        subtotal *
-        tax /
-        100
-      );
-    }, [
-      subtotal,
-      taxPercent,
-    ]);
+  const effectiveGstRate =
+    gstEnabled
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            Number(gstRate) || 0,
+          ),
+        )
+      : 0;
+
+  // ==========================================================
+  // DISCOUNT
+  // ==========================================================
+
+  const normalizedDiscountPercentage =
+    Math.min(
+      100,
+      Math.max(
+        0,
+        Number(
+          discountPercentage,
+        ) || 0,
+      ),
+    );
+
+  const enteredDiscountAmount =
+    Math.max(
+      0,
+      Number(
+        discountAmount,
+      ) || 0,
+    );
+
+  /**
+   * The backend continues to receive only discount_amount.
+   *
+   * Amount mode:
+   *     discount = entered rupee amount
+   *
+   * Percentage mode:
+   *     discount = subtotal * percentage / 100
+   */
 
   const discount =
-    Number(
-      discountAmount,
-    ) || 0;
+    discountMode === "percentage"
+      ? Math.min(
+          subtotal,
+          (subtotal *
+            normalizedDiscountPercentage) /
+            100,
+        )
+      : enteredDiscountAmount;
+
+  // ==========================================================
+  // DISCOUNTED SUBTOTAL
+  // ==========================================================
+
+  const discountedSubtotal =
+    Math.max(
+      0,
+      subtotal - discount,
+    );
+
+  // ==========================================================
+  // GST CALCULATION
+  // ==========================================================
+
+  const gstCalculation =
+    useMemo(() => {
+      if (
+        !gstEnabled ||
+        discountedSubtotal <=
+          0 ||
+        effectiveGstRate <= 0
+      ) {
+        return {
+          gstRate: 0,
+
+          taxableValue:
+            discountedSubtotal,
+
+          gstAmount: 0,
+
+          cgstRate: 0,
+
+          cgstAmount: 0,
+
+          sgstRate: 0,
+
+          sgstAmount: 0,
+        };
+      }
+
+      // GST is inclusive.
+
+      const taxableValue =
+        discountedSubtotal /
+        (
+          1 +
+          effectiveGstRate /
+            100
+        );
+
+      const gstAmount =
+        discountedSubtotal -
+        taxableValue;
+
+      const cgstAmount =
+        gstAmount / 2;
+
+      const sgstAmount =
+        gstAmount -
+        cgstAmount;
+
+      return {
+        gstRate:
+          effectiveGstRate,
+
+        taxableValue,
+
+        gstAmount,
+
+        cgstRate:
+          effectiveGstRate / 2,
+
+        cgstAmount,
+
+        sgstRate:
+          effectiveGstRate / 2,
+
+        sgstAmount,
+      };
+    }, [
+      gstEnabled,
+      discountedSubtotal,
+      effectiveGstRate,
+    ]);
+
+  // ==========================================================
+  // TAX
+  // ==========================================================
+
+  const taxAmount =
+    gstCalculation.gstAmount;
+
+  // ==========================================================
+  // GRAND TOTAL
+  // ==========================================================
+
+  /*
+   * Product prices are GST inclusive.
+   *
+   * Therefore GST is NOT added again.
+   *
+   * Grand total:
+   *
+   * subtotal - discount
+   */
 
   const grandTotal =
     Math.max(
       0,
-      subtotal +
-        taxAmount -
-        discount,
+      subtotal - discount,
     );
 
-
   // ==========================================================
-  // GROUPED ITEMS FOR SUMMARY
+  // GROUPED ITEMS
   // ==========================================================
 
   const groupedItems =
@@ -496,7 +733,9 @@ export default function NewInvoice() {
 
             return {
               product,
+
               items,
+
               quantity:
                 items.length,
 
@@ -513,10 +752,16 @@ export default function NewInvoice() {
             };
           },
         )
-        .filter(Boolean) as {
+        .filter(
+          Boolean,
+        ) as {
         product: Product;
-        items: typeof selectedItems;
+
+        items:
+          typeof selectedItems;
+
         quantity: number;
+
         total: number;
       }[];
     }, [
@@ -524,114 +769,138 @@ export default function NewInvoice() {
       selectedItems,
     ]);
 
-
   // ==========================================================
-  // CREATE BACKEND ITEMS
+  // BACKEND ITEMS
   // ==========================================================
 
-  /**
-   * Convert UI items into the backend format.
-   *
-   * Example:
-   *
-   * Ring #1 = ₹250
-   * Ring #2 = ₹400
-   *
-   * becomes:
-   *
-   * [
-   *   {
-   *     product_name: "Rings",
-   *     item_number: 1,
-   *     unit_price: 250
-   *   },
-   *   {
-   *     product_name: "Rings",
-   *     item_number: 2,
-   *     unit_price: 400
-   *   }
-   * ]
-   */
-  const buildInvoiceItems = () => {
-    return selectedItems.map(
-      (item) => ({
-        product_name:
-          item.productName,
+  const buildInvoiceItems =
+    () => {
+      return selectedItems.map(
+        (item) => ({
+          product_name:
+            item.productName,
 
-        item_number:
-          item.slot,
+          item_number:
+            item.slot,
 
-        unit_price:
-          item.price,
-      }),
-    );
-  };
-
+          unit_price:
+            item.price,
+        }),
+      );
+    };
 
   // ==========================================================
   // CREATE INVOICE
   // ==========================================================
 
-  const handleCreateInvoice = async (
-    event?: FormEvent,
-  ) => {
-    event?.preventDefault();
+  const handleCreateInvoice =
+    async (
+      event?: FormEvent,
+    ) => {
+      event?.preventDefault();
 
-    setError(null);
-    setSuccessMessage(null);
+      setError(null);
+      setSuccessMessage(null);
 
-    // --------------------------------------------------------
-    // Customer name required
-    // --------------------------------------------------------
+      // ------------------------------------------------------
+      // CUSTOMER
+      // ------------------------------------------------------
 
-    if (
-      !customerName.trim()
-    ) {
-      setError(
-        "Please enter customer name.",
-      );
+      if (
+        !customerName.trim()
+      ) {
+        setError(
+          "Please enter the customer name.",
+        );
 
-      return;
-    }
+        return;
+      }
 
-    // --------------------------------------------------------
-    // Product photo required
-    // --------------------------------------------------------
+      // ------------------------------------------------------
+      // PHOTO
+      // ------------------------------------------------------
 
-    if (!photo) {
-      setError(
-        "Please add a product photo.",
-      );
+      if (!photo) {
+        setError(
+          "Please add a product photo.",
+        );
 
-      return;
-    }
+        return;
+      }
 
-    // --------------------------------------------------------
-    // At least one priced item
-    // --------------------------------------------------------
+      // ------------------------------------------------------
+      // PRODUCTS
+      // ------------------------------------------------------
 
-    if (
-      selectedItems.length ===
-      0
-    ) {
-      setError(
-        "Please enter at least one product price.",
-      );
+      if (
+        selectedItems.length ===
+        0
+      ) {
+        setError(
+          "Please enter at least one product price.",
+        );
 
-      return;
-    }
+        return;
+      }
 
-    setSubmitting(true);
+      // ------------------------------------------------------
+      // DISCOUNT
+      // ------------------------------------------------------
 
-    const clientUuid =
-      newClientUuid();
+      if (
+        discount > subtotal
+      ) {
+        setError(
+          "Discount cannot exceed the product total.",
+        );
 
-    // --------------------------------------------------------
-    // Build invoice data
-    // --------------------------------------------------------
+        return;
+      }
 
-    const invoiceData: InvoiceFormData =
-      {
+      if (
+        discountMode === "percentage" &&
+        (
+          normalizedDiscountPercentage < 0 ||
+          normalizedDiscountPercentage > 100
+        )
+      ) {
+        setError(
+          "Discount percentage must be between 0 and 100.",
+        );
+
+        return;
+      }
+
+      // ------------------------------------------------------
+      // GST
+      // ------------------------------------------------------
+
+      if (
+        effectiveGstRate < 0 ||
+        effectiveGstRate > 100
+      ) {
+        setError(
+          "GST rate must be between 0 and 100.",
+        );
+
+        return;
+      }
+
+      setSubmitting(true);
+
+      // ------------------------------------------------------
+      // UUID
+      // ------------------------------------------------------
+
+      const clientUuid =
+        newClientUuid();
+
+      // ------------------------------------------------------
+      // INVOICE DATA
+      // ------------------------------------------------------
+
+      const invoiceData:
+        InvoiceFormData = {
         client_uuid:
           clientUuid,
 
@@ -649,15 +918,19 @@ export default function NewInvoice() {
         items:
           buildInvoiceItems(),
 
+        gst_enabled:
+          gstEnabled,
+
         tax_percent:
-          Number(
-            taxPercent,
-          ) || 0,
+          gstEnabled
+            ? effectiveGstRate
+            : 0,
 
         discount_amount:
-          Number(
-            discountAmount,
-          ) || 0,
+          discount,
+
+        payment_mode:
+          paymentMode,
 
         notes:
           notes.trim() ||
@@ -671,136 +944,132 @@ export default function NewInvoice() {
           new Date().toISOString(),
       };
 
-
-    // ========================================================
-    // ONLINE
-    // ========================================================
-
-    try {
-      if (
-        navigator.onLine
-      ) {
-        await createInvoiceOnline(
-          invoiceData,
-          photo.file,
-        );
-
-        setSuccessMessage(
-          "Invoice created and sent to the customer.",
-        );
-      } else {
-        throw new Error(
-          "offline",
-        );
-      }
-    }
-
-    // ========================================================
-    // OFFLINE / NETWORK FAILURE
-    // ========================================================
-
-    catch (err) {
-      console.error(
-        "Online invoice creation failed:",
-        err,
-      );
+      // ======================================================
+      // ONLINE / OFFLINE
+      // ======================================================
 
       try {
-        /*
-         * Convert the required photo into base64 so the
-         * complete invoice can be stored locally.
-         */
-
-        invoiceData.photo_base64 =
-          await fileToBase64(
+        if (navigator.onLine) {
+          await createInvoiceOnline(
+            invoiceData,
             photo.file,
           );
 
-        invoiceData.photo_content_type =
-          photo.file.type ||
-          "image/jpeg";
-
-
-        await queuePendingInvoice(
-          {
-            ...invoiceData,
-
-            status:
-              "pending",
-          },
-        );
-
-
-        setSuccessMessage(
-          "Invoice saved on this device. It will sync automatically when the connection returns.",
-        );
-
-
-        // Try immediately in case the connection
-        // came back during the request.
-        void runSync();
-      }
-
-      catch (queueError) {
+          setSuccessMessage(
+            "Invoice created successfully.",
+          );
+        } else {
+          throw new Error(
+            "offline",
+          );
+        }
+      } catch (err) {
         console.error(
-          "Offline invoice save failed:",
-          queueError,
+          "Invoice creation failed:",
+          err,
         );
 
-        setError(
-          "Could not save this invoice. Please try again.",
-        );
+        // ====================================================
+        // OFFLINE SAVE
+        // ====================================================
 
-        setSubmitting(false);
+        try {
+          invoiceData.photo_base64 =
+            await fileToBase64(
+              photo.file,
+            );
 
-        return;
+          invoiceData.photo_content_type =
+            photo.file.type ||
+            "image/jpeg";
+
+          await queuePendingInvoice(
+            {
+              ...invoiceData,
+
+              status:
+                "pending",
+            },
+          );
+
+          setSuccessMessage(
+            "Invoice saved securely on this device and will sync automatically.",
+          );
+
+          void runSync();
+        } catch (
+          queueError
+        ) {
+          console.error(
+            "Offline queue failed:",
+            queueError,
+          );
+
+          setError(
+            "Could not save the invoice. Please try again.",
+          );
+
+          setSubmitting(false);
+
+          return;
+        }
       }
-    }
 
+      // ======================================================
+      // RESET FORM
+      // ======================================================
 
-    // ========================================================
-    // RESET FORM
-    // ========================================================
+      setCustomerName("");
+      setCustomerPhone("+91 ");
+      setCustomerEmail("");
 
-    setCustomerName("");
-    setCustomerPhone("");
-    setCustomerEmail("");
-
-    setPrices(
-      createEmptyPrices(),
-    );
-
-    setTaxPercent("0");
-    setDiscountAmount("0");
-
-    setExhibitionName("");
-    setNotes("");
-
-    if (photo) {
-      URL.revokeObjectURL(
-        photo.previewUrl,
+      setPrices(
+        createEmptyPrices(),
       );
-    }
 
-    setPhoto(null);
+      setDiscountAmount(
+        "0",
+      );
 
-    setSubmitting(false);
+      setDiscountPercentage(
+        "0",
+      );
 
+      setDiscountMode(
+        "amount",
+      );
 
-    // ========================================================
-    // GO TO INVOICE LIST
-    // ========================================================
+      setPaymentMode(
+        "online",
+      );
 
-    setTimeout(
-      () => {
+      setExhibitionName("");
+      setNotes("");
+
+      // ------------------------------------------------------
+      // PHOTO CLEANUP
+      // ------------------------------------------------------
+
+      if (photo) {
+        URL.revokeObjectURL(
+          photo.previewUrl,
+        );
+      }
+
+      setPhoto(null);
+
+      setSubmitting(false);
+
+      // ======================================================
+      // NAVIGATE
+      // ======================================================
+
+      setTimeout(() => {
         navigate(
           "/invoices",
         );
-      },
-      900,
-    );
-  };
-
+      }, 900);
+    };
 
   // ==========================================================
   // UI
@@ -813,42 +1082,44 @@ export default function NewInvoice() {
           PAGE HEADER
       ==================================================== */}
 
-      <div className="invoice-page-header">
+      <header className="invoice-page-header">
 
         <div>
+
+          <div className="invoice-eyebrow">
+            ROOCH · EXHIBITION DESK
+          </div>
+
           <h1 className="invoice-page-title">
             Create Invoice
           </h1>
 
           <p className="invoice-page-description">
-            Add customer details and individual product prices.
+            Capture the customer
+            details, jewellery
+            pricing and payment
+            information in one
+            place.
           </p>
-        </div>
-
-
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 font-bold text-blue-600">
-            #
-          </div>
-
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Items
-            </p>
-
-            <p className="text-sm font-extrabold text-slate-900">
-              {totalQuantity}
-            </p>
-          </div>
 
         </div>
 
-      </div>
+        <div className="invoice-item-counter">
 
+          <span className="invoice-item-counter-label">
+            ITEMS
+          </span>
+
+          <strong>
+            {totalQuantity}
+          </strong>
+
+        </div>
+
+      </header>
 
       {/* ====================================================
-          MAIN LAYOUT
+          FORM
       ==================================================== */}
 
       <form
@@ -858,12 +1129,15 @@ export default function NewInvoice() {
         className="invoice-layout"
       >
 
-        <div className="invoice-main">
+        {/* ==================================================
+            MAIN
+        ================================================== */}
 
+        <main className="invoice-main">
 
-          {/* =================================================
-              CUSTOMER DETAILS
-          ================================================= */}
+          {/* ==================================================
+              CUSTOMER
+          ================================================== */}
 
           <section className="invoice-card">
 
@@ -871,24 +1145,26 @@ export default function NewInvoice() {
 
               <div className="invoice-card-heading">
 
-                <div className="invoice-card-icon">
-                  👤
+                <div className="invoice-card-number">
+                  01
                 </div>
 
                 <div>
+
                   <h2 className="invoice-card-title">
                     Customer details
                   </h2>
 
                   <p className="invoice-card-description">
-                    Add the customer's basic information.
+                    Enter the customer's
+                    basic information.
                   </p>
+
                 </div>
 
               </div>
 
             </div>
-
 
             <div className="invoice-card-body">
 
@@ -897,13 +1173,11 @@ export default function NewInvoice() {
                 <div className="form-full">
 
                   <label className="form-label">
-
                     Customer name
 
                     <span className="required-badge">
                       Required
                     </span>
-
                   </label>
 
                   <input
@@ -922,17 +1196,14 @@ export default function NewInvoice() {
 
                 </div>
 
-
                 <div>
 
                   <label className="form-label">
-
-                    WhatsApp / Phone{" "}
+                    WhatsApp / Phone
 
                     <span className="form-optional">
-                      (Optional)
+                      Optional
                     </span>
-
                   </label>
 
                   <input
@@ -941,28 +1212,27 @@ export default function NewInvoice() {
                     value={
                       customerPhone
                     }
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const withoutPrefix = value.replace(/^\+91\s*/, "");
                       setCustomerPhone(
-                        e.target.value,
-                      )
-                    }
-                    placeholder="+91 9876543210"
+                        `+91 ${withoutPrefix}`.trimEnd(),
+                      );
+                    }}
+                    placeholder="+91 98765 43210"
                     className="invoice-input"
                   />
 
                 </div>
 
-
                 <div>
 
                   <label className="form-label">
-
-                    Email{" "}
+                    Email
 
                     <span className="form-optional">
-                      (Optional)
+                      Optional
                     </span>
-
                   </label>
 
                   <input
@@ -987,10 +1257,9 @@ export default function NewInvoice() {
 
           </section>
 
-
-          {/* =================================================
-              PRODUCT PHOTO
-          ================================================= */}
+          {/* ==================================================
+              PHOTO
+          ================================================== */}
 
           <section className="invoice-card">
 
@@ -998,8 +1267,8 @@ export default function NewInvoice() {
 
               <div className="invoice-card-heading">
 
-                <div className="invoice-card-icon">
-                  📷
+                <div className="invoice-card-number">
+                  02
                 </div>
 
                 <div>
@@ -1015,7 +1284,9 @@ export default function NewInvoice() {
                   </h2>
 
                   <p className="invoice-card-description">
-                    Take or upload a clear photo of the purchased products.
+                    Add a clear photograph
+                    of the purchased
+                    jewellery.
                   </p>
 
                 </div>
@@ -1024,14 +1295,15 @@ export default function NewInvoice() {
 
             </div>
 
-
             <div className="invoice-card-body">
 
               <div className="product-photo-wrapper">
 
                 <CameraCapture
                   value={photo}
-                  onChange={setPhoto}
+                  onChange={
+                    setPhoto
+                  }
                 />
 
               </div>
@@ -1040,10 +1312,9 @@ export default function NewInvoice() {
 
           </section>
 
-
-          {/* =================================================
+          {/* ==================================================
               PRODUCT PRICES
-          ================================================= */}
+          ================================================== */}
 
           <section className="invoice-card">
 
@@ -1051,8 +1322,8 @@ export default function NewInvoice() {
 
               <div className="invoice-card-heading">
 
-                <div className="invoice-card-icon invoice-card-icon-dark">
-                  ₹
+                <div className="invoice-card-number">
+                  03
                 </div>
 
                 <div>
@@ -1062,22 +1333,24 @@ export default function NewInvoice() {
                   </h2>
 
                   <p className="invoice-card-description">
-                    Enter the selling price of each unique product.
+                    Enter the final
+                    customer price for
+                    each unique item.
                   </p>
 
                 </div>
 
               </div>
 
-
               <div className="product-price-note">
-                Each box = 1 unique item
+                GST inclusive
               </div>
 
             </div>
 
-
             <div className="product-price-body">
+
+              {/* COLUMN HEADERS */}
 
               <div className="product-columns-header">
 
@@ -1091,15 +1364,13 @@ export default function NewInvoice() {
                       key={slot}
                       className="product-slot-heading"
                     >
-
                       <div className="product-slot-number">
                         {slot}
                       </div>
 
                       <span className="product-slot-caption">
-                        Item
+                        ITEM
                       </span>
-
                     </div>
                   ),
                 )}
@@ -1108,6 +1379,7 @@ export default function NewInvoice() {
 
               </div>
 
+              {/* PRODUCTS */}
 
               {products.map(
                 (product) => {
@@ -1123,7 +1395,6 @@ export default function NewInvoice() {
                         ).trim() !== "",
                     ).length;
 
-
                   return (
                     <div
                       key={
@@ -1132,32 +1403,43 @@ export default function NewInvoice() {
                       className="product-row"
                     >
 
+                      {/* PRODUCT */}
+
                       <div className="product-info">
 
                         <div className="product-icon">
-                          {product.icon}
+                          {
+                            product.icon
+                          }
                         </div>
 
-                        <div className="min-w-0">
+                        <div className="product-info-copy">
 
                           <div className="product-name">
-                            {product.name}
+                            {
+                              product.name
+                            }
                           </div>
 
                           <div className="product-count">
-                            {enteredCount}{" "}
-                            {enteredCount ===
-                            1
-                              ? "item"
-                              : "items"}
+                            {
+                              enteredCount
+                            }{" "}
+                            {
+                              enteredCount ===
+                              1
+                                ? "item"
+                                : "items"
+                            }
                           </div>
 
                         </div>
 
                       </div>
 
+                      {/* FIVE PRICE BOXES */}
 
-                      <div className="product-prices-mobile-grid">
+                      <div className="product-prices-grid">
 
                         {PRODUCT_SLOTS.map(
                           (slot) => {
@@ -1168,7 +1450,6 @@ export default function NewInvoice() {
                               ]?.[
                                 slot
                               ] ?? "";
-
 
                             return (
                               <div
@@ -1194,10 +1475,12 @@ export default function NewInvoice() {
                                     updatePrice(
                                       product.id,
                                       slot,
-                                      e.target.value,
+                                      e
+                                        .target
+                                        .value,
                                     )
                                   }
-                                  placeholder="—"
+                                  placeholder="0"
                                   aria-label={`${product.name} item ${slot} price`}
                                   className="price-input"
                                 />
@@ -1209,19 +1492,24 @@ export default function NewInvoice() {
 
                       </div>
 
+                      {/* REMOVE — ONLY FOR NEWLY ADDED PRODUCTS */}
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          removeProduct(
-                            product.id,
-                          )
-                        }
-                        aria-label={`Remove ${product.name}`}
-                        className="remove-product"
-                      >
-                        ×
-                      </button>
+                      {!isInitialProduct(
+                        product.id,
+                      ) && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeProduct(
+                              product.id,
+                            )
+                          }
+                          className="remove-product"
+                          aria-label={`Remove ${product.name}`}
+                        >
+                          ×
+                        </button>
+                      )}
 
                     </div>
                   );
@@ -1230,56 +1518,50 @@ export default function NewInvoice() {
 
             </div>
 
-
             {/* ADD PRODUCT */}
 
             <div className="add-product-area">
 
-              <div className="add-product-row">
+              <input
+                value={
+                  newProductName
+                }
+                onChange={(e) =>
+                  setNewProductName(
+                    e.target.value,
+                  )
+                }
+                onKeyDown={(e) => {
+                  if (
+                    e.key ===
+                    "Enter"
+                  ) {
+                    e.preventDefault();
 
-                <input
-                  value={
-                    newProductName
+                    addProduct();
                   }
-                  onChange={(e) =>
-                    setNewProductName(
-                      e.target.value,
-                    )
-                  }
-                  onKeyDown={(e) => {
-                    if (
-                      e.key ===
-                      "Enter"
-                    ) {
-                      e.preventDefault();
+                }}
+                placeholder="Add another product"
+                className="invoice-input"
+              />
 
-                      addProduct();
-                    }
-                  }}
-                  placeholder="Add another product, e.g. Brooch"
-                  className="invoice-input"
-                />
-
-                <button
-                  type="button"
-                  onClick={
-                    addProduct
-                  }
-                  className="add-product-button"
-                >
-                  + Add Product
-                </button>
-
-              </div>
+              <button
+                type="button"
+                onClick={
+                  addProduct
+                }
+                className="add-product-button"
+              >
+                + Add product
+              </button>
 
             </div>
 
           </section>
 
-
-          {/* =================================================
+          {/* ==================================================
               ADDITIONAL DETAILS
-          ================================================= */}
+          ================================================== */}
 
           <section className="invoice-card">
 
@@ -1287,8 +1569,8 @@ export default function NewInvoice() {
 
               <div className="invoice-card-heading">
 
-                <div className="invoice-card-icon">
-                  📝
+                <div className="invoice-card-number">
+                  04
                 </div>
 
                 <div>
@@ -1298,7 +1580,8 @@ export default function NewInvoice() {
                   </h2>
 
                   <p className="invoice-card-description">
-                    Optional event and invoice notes.
+                    Event information
+                    and notes.
                   </p>
 
                 </div>
@@ -1307,7 +1590,6 @@ export default function NewInvoice() {
 
             </div>
 
-
             <div className="invoice-card-body">
 
               <div className="form-grid">
@@ -1315,13 +1597,11 @@ export default function NewInvoice() {
                 <div className="form-full">
 
                   <label className="form-label">
-
-                    Exhibition / Event{" "}
+                    Exhibition / Event
 
                     <span className="form-optional">
-                      (Optional)
+                      Optional
                     </span>
-
                   </label>
 
                   <input
@@ -1333,23 +1613,20 @@ export default function NewInvoice() {
                         e.target.value,
                       )
                     }
-                    placeholder="e.g. Jewellery Expo 2026"
+                    placeholder="Jewellery Expo 2026"
                     className="invoice-input"
                   />
 
                 </div>
 
-
                 <div className="form-full">
 
                   <label className="form-label">
-
-                    Notes{" "}
+                    Notes
 
                     <span className="form-optional">
-                      (Optional)
+                      Optional
                     </span>
-
                   </label>
 
                   <textarea
@@ -1374,235 +1651,648 @@ export default function NewInvoice() {
 
           </section>
 
-
-          {/* =================================================
-              ERROR / SUCCESS
-          ================================================= */}
+          {/* ERROR */}
 
           {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            <div className="invoice-alert invoice-alert-error">
               {error}
             </div>
           )}
 
+          {/* SUCCESS */}
+
           {successMessage && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+            <div className="invoice-alert invoice-alert-success">
               {successMessage}
             </div>
           )}
 
-        </div>
+        </main>
 
-
-        {/* ==================================================
-            SUMMARY
-        ================================================== */}
+        {/* ====================================================
+            INVOICE SUMMARY
+        ==================================================== */}
 
         <aside className="invoice-summary">
 
-          <div className="invoice-card">
+          <div className="invoice-summary-card">
 
-            <div className="border-b border-slate-100 bg-slate-900 px-5 py-5 text-white">
+            {/* SUMMARY HEADER */}
 
-              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-                Invoice summary
-              </p>
+            <div className="invoice-summary-brand">
 
+              <div>
 
-              <div className="mt-2 flex items-end justify-between">
+                <span>
+                  INVOICE SUMMARY
+                </span>
 
-                <div>
-
-                  <p className="text-sm text-slate-400">
-                    {totalQuantity} unique item
-                    {totalQuantity !==
+                <strong>
+                  {totalQuantity}{" "}
+                  {
+                    totalQuantity ===
                     1
-                      ? "s"
-                      : ""}
-                  </p>
-
-                  <p className="mt-1 text-3xl font-bold tracking-tight">
-                    ₹
-                    {grandTotal.toFixed(
-                      2,
-                    )}
-                  </p>
-
-                </div>
-
-
-                <div className="rounded-xl bg-white/10 px-3 py-2 text-center">
-
-                  <p className="text-[9px] uppercase tracking-wider text-slate-400">
-                    Items
-                  </p>
-
-                  <p className="text-lg font-bold">
-                    {totalQuantity}
-                  </p>
-
-                </div>
+                      ? "item"
+                      : "items"
+                  }
+                </strong>
 
               </div>
 
             </div>
 
+            {/* GRAND TOTAL */}
 
-            <div className="max-h-[420px] overflow-y-auto p-4">
+            <div className="invoice-summary-total">
+
+              <span>
+                GRAND TOTAL
+              </span>
+
+              <strong>
+                ₹
+                {grandTotal.toFixed(
+                  2,
+                )}
+              </strong>
+
+            </div>
+
+            {/* PRODUCTS */}
+
+            <div className="invoice-summary-items">
 
               {groupedItems.length ===
               0 ? (
 
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
+                <div className="invoice-empty-summary">
 
-                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white text-xl shadow-sm">
+                  <div className="invoice-empty-icon">
                     ₹
                   </div>
 
-                  <p className="text-sm font-semibold text-slate-700">
+                  <strong>
                     No items yet
-                  </p>
+                  </strong>
 
-                  <p className="mt-1 text-xs leading-5 text-slate-400">
-                    Enter prices above to add products to this invoice.
-                  </p>
+                  <span>
+                    Enter product
+                    prices above to
+                    build the invoice.
+                  </span>
 
                 </div>
 
               ) : (
 
-                <div className="space-y-4">
+                groupedItems.map(
+                  ({
+                    product,
+                    items,
+                    quantity,
+                    total,
+                  }) => (
 
-                  {groupedItems.map(
-                    ({
-                      product,
-                      items,
-                      quantity,
-                      total,
-                    }) => (
+                    <div
+                      key={
+                        product.id
+                      }
+                      className="summary-product-card"
+                    >
 
-                      <div
-                        key={
-                          product.id
-                        }
-                        className="rounded-xl border border-slate-100 bg-slate-50 p-3"
-                      >
+                      <div className="summary-product-header">
 
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="summary-product-left">
 
-                          <div className="flex min-w-0 items-center gap-2">
+                          <span className="summary-product-icon">
+                            {
+                              product.icon
+                            }
+                          </span>
 
-                            <span className="text-lg">
+                          <div>
+
+                            <strong>
                               {
-                                product.icon
+                                product.name
+                              }
+                            </strong>
+
+                            <span>
+                              {
+                                quantity
+                              }{" "}
+                              {
+                                quantity ===
+                                1
+                                  ? "item"
+                                  : "items"
                               }
                             </span>
 
-                            <div className="min-w-0">
-
-                              <p className="truncate text-sm font-bold text-slate-800">
-                                {
-                                  product.name
-                                }
-                              </p>
-
-                              <p className="text-[10px] text-slate-400">
-                                {quantity} unique item
-                                {quantity !==
-                                1
-                                  ? "s"
-                                  : ""}
-                              </p>
-
-                            </div>
-
                           </div>
 
-
-                          <p className="shrink-0 text-sm font-bold text-slate-900">
-                            ₹
-                            {total.toFixed(
-                              2,
-                            )}
-                          </p>
-
                         </div>
 
-
-                        <div className="mt-3 space-y-1.5 border-t border-slate-200 pt-2">
-
-                          {items.map(
-                            (item) => (
-
-                              <div
-                                key={`${item.productId}-${item.slot}`}
-                                className="flex items-center justify-between gap-3 text-xs"
-                              >
-
-                                <span className="text-slate-500">
-                                  Item{" "}
-                                  {
-                                    item.slot
-                                  }
-                                </span>
-
-                                <span className="font-semibold text-slate-700">
-                                  ₹
-                                  {item.price.toFixed(
-                                    2,
-                                  )}
-                                </span>
-
-                              </div>
-
-                            ),
+                        <strong className="summary-product-total">
+                          ₹
+                          {total.toFixed(
+                            2,
                           )}
-
-                        </div>
+                        </strong>
 
                       </div>
 
-                    ),
-                  )}
+                      <div className="summary-product-items">
 
-                </div>
+                        {items.map(
+                          (item) => (
+
+                            <div
+                              key={`${item.productId}-${item.slot}`}
+                              className="summary-product-item"
+                            >
+
+                              <span>
+                                Item{" "}
+                                {
+                                  item.slot
+                                }
+                              </span>
+
+                              <strong>
+                                ₹
+                                {item.price.toFixed(
+                                  2,
+                                )}
+                              </strong>
+
+                            </div>
+
+                          ),
+                        )}
+
+                      </div>
+
+                    </div>
+
+                  ),
+                )
 
               )}
 
             </div>
 
+            {/* PAYMENT MODE */}
 
-            {/* =================================================
-                TOTALS
-            ================================================= */}
+            <div className="invoice-summary-section">
 
-            <div className="border-t border-slate-100 p-5">
+              <span className="invoice-summary-section-label">
+                PAYMENT MODE
+              </span>
 
-              <div className="space-y-3">
+              <div className="payment-mode-options">
 
-                <div className="flex items-center justify-between text-sm">
+                <button
+                  type="button"
+                  className={`payment-mode-option ${
+                    paymentMode ===
+                    "online"
+                      ? "selected"
+                      : ""
+                  }`}
+                  onClick={() =>
+                    setPaymentMode(
+                      "online",
+                    )
+                  }
+                >
 
-                  <span className="text-slate-500">
-                    Subtotal
+                  <span className="payment-mode-icon">
+                    ₹
                   </span>
 
-                  <span className="font-semibold text-slate-800">
+                  <span>
+                    Digital
+                  </span>
+
+                </button>
+
+                <button
+                  type="button"
+                  className={`payment-mode-option ${
+                    paymentMode ===
+                    "cash"
+                      ? "selected"
+                      : ""
+                  }`}
+                  onClick={() =>
+                    setPaymentMode(
+                      "cash",
+                    )
+                  }
+                >
+
+                  <span className="payment-mode-icon">
                     ₹
-                    {subtotal.toFixed(
-                      2,
-                    )}
+                  </span>
+
+                  <span>
+                    Cash
+                  </span>
+
+                </button>
+
+              </div>
+
+            </div>
+
+            {/* SUMMARY BREAKDOWN */}
+
+            <div className="invoice-summary-breakdown">
+
+              {/* PRODUCT TOTAL */}
+
+              <div>
+
+                <span>
+                  Product total
+                </span>
+
+                <strong>
+                  ₹
+                  {subtotal.toFixed(
+                    2,
+                  )}
+                </strong>
+
+              </div>
+
+              {/* GST */}
+
+              <div>
+
+                <span>
+                  GST
+                </span>
+
+                <div className="summary-inline-input">
+
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={
+                      gstEnabled
+                        ? effectiveGstRate
+                        : 0
+                    }
+                    onChange={(e) =>
+                      setGstRate(
+                        Number(
+                          e.target
+                            .value,
+                        ),
+                      )
+                    }
+                    disabled={
+                      !gstEnabled
+                    }
+                    aria-label="GST rate"
+                  />
+
+                  <span>
+                    %
                   </span>
 
                 </div>
 
+              </div>
 
-                <div className="grid grid-cols-2 gap-3">
+              {/* GST TOGGLE */}
 
-                  <div>
+              <div className="gst-status-row">
 
-                    <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Tax %
+                <span>
+                  GST status
+                </span>
+
+                <div className="gst-control">
+
+                  <span
+                    className={
+                      gstEnabled
+                        ? "gst-status-on"
+                        : "gst-status-off"
+                    }
+                  >
+                    {gstEnabled
+                      ? "ON"
+                      : "OFF"}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setGstEnabled(
+                        !gstEnabled,
+                      )
+                    }
+                    className={`gst-toggle ${
+                      gstEnabled
+                        ? "gst-toggle-on"
+                        : "gst-toggle-off"
+                    }`}
+                    aria-label={
+                      gstEnabled
+                        ? "Disable GST"
+                        : "Enable GST"
+                    }
+                    aria-pressed={
+                      gstEnabled
+                    }
+                  >
+
+                    <span
+                      className={`gst-toggle-knob ${
+                        gstEnabled
+                          ? "gst-toggle-knob-on"
+                          : "gst-toggle-knob-off"
+                      }`}
+                    />
+
+                  </button>
+
+                </div>
+
+              </div>
+
+              {/* TAX */}
+
+              <div>
+
+                <span>
+                  Tax amount
+                </span>
+
+                <strong>
+                  ₹
+                  {taxAmount.toFixed(
+                    2,
+                  )}
+                </strong>
+
+              </div>
+
+              {/* ==================================================
+                  DISCOUNT
+              ================================================== */}
+
+              <div>
+
+                {/* DISCOUNT LABEL + RADIO BUTTONS */}
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent:
+                      "space-between",
+                    gap: "8px",
+                    marginBottom:
+                      "8px",
+                    flexWrap: "wrap",
+                  }}
+                >
+
+                  <span>
+                    Discount
+                  </span>
+
+                  {/* RADIO OPTIONS */}
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems:
+                        "center",
+                      gap: "12px",
+                    }}
+                  >
+
+                    {/* AMOUNT RADIO */}
+
+                    <label
+                      style={{
+                        display:
+                          "flex",
+                        alignItems:
+                          "center",
+                        gap: "4px",
+                        cursor:
+                          "pointer",
+                        fontSize:
+                          "11px",
+                        fontWeight:
+                          600,
+                        color:
+                          "#6f0730",
+                      }}
+                    >
+
+                      <input
+                        type="radio"
+                        name="discountMode"
+                        value="amount"
+                        checked={
+                          discountMode ===
+                          "amount"
+                        }
+                        onChange={() =>
+                          setDiscountMode(
+                            "amount",
+                          )
+                        }
+                        style={{
+                          accentColor:
+                            "#6f0730",
+                          cursor:
+                            "pointer",
+                        }}
+                      />
+
+                      <span>
+                        Amount
+                      </span>
+
                     </label>
+
+                    {/* PERCENTAGE RADIO */}
+
+                    <label
+                      style={{
+                        display:
+                          "flex",
+                        alignItems:
+                          "center",
+                        gap: "4px",
+                        cursor:
+                          "pointer",
+                        fontSize:
+                          "11px",
+                        fontWeight:
+                          600,
+                        color:
+                          "#6f0730",
+                      }}
+                    >
+
+                      <input
+                        type="radio"
+                        name="discountMode"
+                        value="percentage"
+                        checked={
+                          discountMode ===
+                          "percentage"
+                        }
+                        onChange={() =>
+                          setDiscountMode(
+                            "percentage",
+                          )
+                        }
+                        style={{
+                          accentColor:
+                            "#6f0730",
+                          cursor:
+                            "pointer",
+                        }}
+                      />
+
+                      <span>
+                        Percentage
+                      </span>
+
+                    </label>
+
+                  </div>
+
+                </div>
+
+                {/* DISCOUNT INPUTS */}
+
+                <div
+                  style={{
+                    display:
+                      "flex",
+                    flexDirection:
+                      "column",
+                    gap: "7px",
+                  }}
+                >
+
+                  {/* ==================================================
+                      DISCOUNT AMOUNT
+                  ================================================== */}
+
+                  <div
+                    className="summary-inline-input"
+                    title={
+                      discountMode ===
+                      "percentage"
+                        ? "Discount amount is calculated from the percentage"
+                        : "Enter discount amount"
+                    }
+                    style={{
+                      opacity:
+                        discountMode ===
+                        "percentage"
+                          ? 0.55
+                          : 1,
+
+                      background:
+                        discountMode ===
+                        "percentage"
+                          ? "#f1f1f1"
+                          : undefined,
+                    }}
+                  >
+
+                    <span>
+                      ₹
+                    </span>
+
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={
+                        discountMode ===
+                        "percentage"
+                          ? discount.toFixed(
+                              2,
+                            )
+                          : discountAmount
+                      }
+                      onChange={(e) =>
+                        setDiscountAmount(
+                          e.target.value,
+                        )
+                      }
+                      disabled={
+                        discountMode ===
+                        "percentage"
+                      }
+                      aria-label="Discount amount"
+                      style={{
+                        background:
+                          discountMode ===
+                          "percentage"
+                            ? "#f1f1f1"
+                            : undefined,
+
+                        color:
+                          discountMode ===
+                          "percentage"
+                            ? "#8b8b8b"
+                            : undefined,
+
+                        cursor:
+                          discountMode ===
+                          "percentage"
+                            ? "not-allowed"
+                            : undefined,
+                      }}
+                    />
+
+                  </div>
+
+                  {/* ==================================================
+                      DISCOUNT PERCENTAGE
+                  ================================================== */}
+
+                  <div
+                    className="summary-inline-input"
+                    title={
+                      discountMode ===
+                      "amount"
+                        ? "Select Percentage to enter a percentage discount"
+                        : "Enter discount percentage"
+                    }
+                    style={{
+                      opacity:
+                        discountMode ===
+                        "amount"
+                          ? 0.55
+                          : 1,
+
+                      background:
+                        discountMode ===
+                        "amount"
+                          ? "#f1f1f1"
+                          : undefined,
+                    }}
+                  >
 
                     <input
                       type="number"
@@ -1610,132 +2300,176 @@ export default function NewInvoice() {
                       max="100"
                       step="0.01"
                       value={
-                        taxPercent
+                        discountPercentage
                       }
                       onChange={(e) =>
-                        setTaxPercent(
+                        setDiscountPercentage(
                           e.target.value,
                         )
                       }
-                      className="invoice-small-input"
+                      disabled={
+                        discountMode ===
+                        "amount"
+                      }
+                      aria-label="Discount percentage"
+                      style={{
+                        background:
+                          discountMode ===
+                          "amount"
+                            ? "#f1f1f1"
+                            : undefined,
+
+                        color:
+                          discountMode ===
+                          "amount"
+                            ? "#8b8b8b"
+                            : undefined,
+
+                        cursor:
+                          discountMode ===
+                          "amount"
+                            ? "not-allowed"
+                            : undefined,
+                      }}
                     />
 
-                  </div>
-
-
-                  <div>
-
-                    <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Discount
-                    </label>
-
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={
-                        discountAmount
-                      }
-                      onChange={(e) =>
-                        setDiscountAmount(
-                          e.target.value,
-                        )
-                      }
-                      className="invoice-small-input"
-                    />
+                    <span>
+                      %
+                    </span>
 
                   </div>
-
-                </div>
-
-
-                <div className="flex items-center justify-between text-sm">
-
-                  <span className="text-slate-500">
-                    Tax amount
-                  </span>
-
-                  <span className="font-semibold text-slate-800">
-                    ₹
-                    {taxAmount.toFixed(
-                      2,
-                    )}
-                  </span>
-
-                </div>
-
-
-                <div className="flex items-center justify-between text-sm">
-
-                  <span className="text-slate-500">
-                    Discount
-                  </span>
-
-                  <span className="font-semibold text-red-500">
-                    - ₹
-                    {discount.toFixed(
-                      2,
-                    )}
-                  </span>
-
-                </div>
-
-
-                <div className="my-3 border-t border-dashed border-slate-200" />
-
-
-                <div className="flex items-end justify-between gap-3">
-
-                  <div>
-
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      Grand total
-                    </p>
-
-                    <p className="mt-1 text-2xl font-bold text-slate-900">
-                      ₹
-                      {grandTotal.toFixed(
-                        2,
-                      )}
-                    </p>
-
-                  </div>
-
-
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-600">
-                    Ready
-                  </span>
 
                 </div>
 
               </div>
 
+            </div>
 
-              {/* =================================================
-                  CREATE BUTTON
-              ================================================= */}
+            {/* ==================================================
+                GST BREAKUP
+            ================================================== */}
 
-              <button
-                type="submit"
-                disabled={
-                  submitting
-                }
-                className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
-              >
+            {gstEnabled &&
+              discountedSubtotal >
+                0 && (
 
-                {submitting
-                  ? "Creating Invoice..."
-                  : "Create Invoice"}
+                <div className="invoice-summary-gst-details">
 
-                {!submitting && (
-                  <span>
-                    →
-                  </span>
-                )}
+                  <div className="gst-detail-row">
 
-              </button>
+                    <span>
+                      Taxable value
+                    </span>
+
+                    <strong>
+                      ₹
+                      {gstCalculation.taxableValue.toFixed(
+                        2,
+                      )}
+                    </strong>
+
+                  </div>
+
+                  <div className="gst-detail-row">
+
+                    <span>
+                      CGST @{" "}
+                      {gstCalculation.cgstRate.toFixed(
+                        2,
+                      )}
+                      %
+                    </span>
+
+                    <strong>
+                      ₹
+                      {gstCalculation.cgstAmount.toFixed(
+                        2,
+                      )}
+                    </strong>
+
+                  </div>
+
+                  <div className="gst-detail-row">
+
+                    <span>
+                      SGST @{" "}
+                      {gstCalculation.sgstRate.toFixed(
+                        2,
+                      )}
+                      %
+                    </span>
+
+                    <strong>
+                      ₹
+                      {gstCalculation.sgstAmount.toFixed(
+                        2,
+                      )}
+                    </strong>
+
+                  </div>
+
+                </div>
+              )}
+
+            {/* ==================================================
+                GRAND TOTAL
+            ================================================== */}
+
+            <div className="invoice-grand-total">
+
+              <div>
+
+                <span>
+                  GRAND TOTAL
+                </span>
+
+                <strong>
+                  ₹
+                  {grandTotal.toFixed(
+                    2,
+                  )}
+                </strong>
+
+              </div>
+
+              <span className="invoice-ready-badge">
+                Ready
+              </span>
 
             </div>
+
+            {/* ==================================================
+                CREATE
+            ================================================== */}
+
+            <button
+              type="submit"
+              disabled={
+                submitting
+              }
+              className="create-invoice-button"
+            >
+
+              {submitting
+                ? "Creating invoice..."
+                : "Create invoice"}
+
+              {!submitting && (
+                <span>
+                  →
+                </span>
+              )}
+
+            </button>
+
+            {/* NOTE */}
+
+            <p className="invoice-summary-note">
+              Your invoice is saved
+              securely and can sync
+              automatically when
+              connectivity is restored.
+            </p>
 
           </div>
 

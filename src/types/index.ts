@@ -11,13 +11,46 @@ export interface Agent {
 }
 
 // ============================================================
+// PAYMENT MODE
+// ============================================================
+
+export type PaymentMode =
+  | "online"
+  | "cash";
+
+// ============================================================
+// DISCOUNT MODE
+// ============================================================
+
+/**
+ * Discount can be entered either as:
+ *
+ * amount     -> fixed rupee amount
+ * percentage -> percentage of subtotal
+ */
+export type DiscountMode =
+  | "amount"
+  | "percentage";
+
+// ============================================================
 // MESSAGE LOG
 // ============================================================
 
 export interface MessageLog {
-  channel: "whatsapp" | "sms";
-  status: "pending" | "sent" | "failed" | "skipped";
+  channel:
+    | "whatsapp"
+    | "sms";
+
+  status:
+    | "pending"
+    | "sent"
+    | "failed"
+    | "skipped";
+
+  provider_sid?: string | null;
+
   error_message?: string | null;
+
   created_at: string;
 }
 
@@ -25,20 +58,39 @@ export interface MessageLog {
 // INVOICE ITEM
 // ============================================================
 
-/**
- * One individually priced product inside an invoice.
- *
- * Example:
- *
- * Ring #1 -> ₹250
- * Ring #2 -> ₹400
- * Ring #3 -> ₹350
- */
 export interface InvoiceItem {
   id?: number;
+
   product_name: string;
+
   item_number: number;
+
+  /**
+   * Final customer-facing GST-inclusive price.
+   */
   unit_price: number;
+}
+
+// ============================================================
+// GST BREAKUP
+// ============================================================
+
+export interface GSTBreakup {
+  gst_rate: number;
+
+  taxable_value: number;
+
+  gst_amount: number;
+
+  cgst_rate: number;
+
+  cgst_amount: number;
+
+  sgst_rate: number;
+
+  sgst_amount: number;
+
+  inclusive: boolean;
 }
 
 // ============================================================
@@ -53,6 +105,12 @@ export interface InvoiceOut {
   invoice_number: string;
 
   // ----------------------------------------------------------
+  // Agent
+  // ----------------------------------------------------------
+
+  agent_id?: number;
+
+  // ----------------------------------------------------------
   // Customer
   // ----------------------------------------------------------
 
@@ -63,29 +121,95 @@ export interface InvoiceOut {
   customer_email?: string | null;
 
   // ----------------------------------------------------------
-  // Product information
+  // Products
   // ----------------------------------------------------------
 
-  /**
-   * Optional description shared by the invoice.
-   */
   product_description?: string | null;
 
-  /**
-   * Every product/item has its own manually entered price.
-   */
   items: InvoiceItem[];
 
   // ----------------------------------------------------------
-  // Tax / discount
+  // GST
   // ----------------------------------------------------------
+
+  gst_enabled: boolean;
 
   tax_percent: number;
 
-  discount_amount: number;
+  taxable_value: number;
+
+  tax_amount: number;
+
+  cgst_rate: number;
+
+  cgst_amount: number;
+
+  sgst_rate: number;
+
+  sgst_amount: number;
+
+  gst_breakup?: GSTBreakup;
 
   // ----------------------------------------------------------
-  // Additional information
+  // Discount
+  // ----------------------------------------------------------
+
+  /**
+   * Final calculated discount amount in rupees.
+   *
+   * This remains the authoritative value used by
+   * the backend.
+   */
+  discount_amount: number;
+
+  /**
+   * Optional frontend information about how the discount
+   * was entered.
+   */
+  discount_mode?: DiscountMode;
+
+  /**
+   * Discount percentage when percentage mode is used.
+   */
+  discount_percentage?: number;
+
+  // ----------------------------------------------------------
+  // Payment
+  // ----------------------------------------------------------
+
+  payment_mode: PaymentMode;
+
+  // ----------------------------------------------------------
+  // Grand total
+  // ----------------------------------------------------------
+
+  /**
+   * Final customer payable amount.
+   *
+   * GST is already included in item prices.
+   *
+   * grand_total =
+   * subtotal - discount
+   */
+  grand_total: number;
+
+  // ----------------------------------------------------------
+  // Calculated values
+  // ----------------------------------------------------------
+
+  quantity: number;
+
+  subtotal: number;
+
+  /**
+   * Kept for compatibility with existing frontend code.
+   *
+   * Backend total should represent the final payable amount.
+   */
+  total: number;
+
+  // ----------------------------------------------------------
+  // Additional
   // ----------------------------------------------------------
 
   notes?: string | null;
@@ -109,40 +233,14 @@ export interface InvoiceOut {
   captured_at: string;
 
   // ----------------------------------------------------------
-  // Calculated by backend
-  // ----------------------------------------------------------
-
-  /**
-   * Total number of individually priced items.
-   */
-  quantity: number;
-
-  /**
-   * Sum of all item prices.
-   */
-  subtotal: number;
-
-  /**
-   * Calculated tax.
-   */
-  tax_amount: number;
-
-  /**
-   * Final amount:
-   *
-   * subtotal + tax_amount - discount_amount
-   */
-  total: number;
-
-  // ----------------------------------------------------------
-  // WhatsApp / SMS delivery history
+  // Messaging
   // ----------------------------------------------------------
 
   messages: MessageLog[];
 }
 
 // ============================================================
-// INVOICE LIST
+// INVOICE LIST ITEM
 // ============================================================
 
 export interface InvoiceListItem {
@@ -154,54 +252,34 @@ export interface InvoiceListItem {
 
   customer_phone?: string | null;
 
+  /**
+   * Final payable amount.
+   */
   total: number;
 
-  created_at: string;
-
   /**
-   * Number of individually priced items in the invoice.
+   * Same final payable amount as stored in backend.
    */
+  grand_total?: number;
+
   quantity: number;
+
+  created_at: string;
 }
 
 // ============================================================
 // FORM ITEM
 // ============================================================
 
-/**
- * Item being entered by the booth user.
- *
- * There is NO fixed product price.
- *
- * The booth agent manually enters the price for every
- * individual item.
- *
- * Example:
- *
- * Rings #1 -> 250
- * Rings #2 -> 400
- * Rings #3 -> 350
- */
 export interface InvoiceItemInput {
-  /**
-   * Product/category name.
-   *
-   * Example:
-   * Rings
-   * Necklace
-   * Bracelet
-   */
   product_name: string;
 
-  /**
-   * Position shown in the UI:
-   *
-   * 1 | 2 | 3 | 4 | 5
-   */
   item_number: number;
 
   /**
-   * Manually entered price for this particular item.
+   * Manually entered final customer price.
+   *
+   * GST is already included.
    */
   unit_price: number;
 }
@@ -210,84 +288,97 @@ export interface InvoiceItemInput {
 // INVOICE FORM DATA
 // ============================================================
 
-/**
- * Invoice captured by the frontend before it is:
- *
- * 1. Sent directly to the backend when online
- * OR
- * 2. Stored in IndexedDB when offline
- */
 export interface InvoiceFormData {
   // ----------------------------------------------------------
   // Idempotency
   // ----------------------------------------------------------
 
-  /**
-   * Client-generated UUID.
-   *
-   * Used by the backend to prevent duplicate invoices
-   * when an offline invoice is retried.
-   */
   client_uuid: string;
 
   // ----------------------------------------------------------
   // Customer
   // ----------------------------------------------------------
 
-  /**
-   * REQUIRED.
-   */
   customer_name: string;
 
-  /**
-   * OPTIONAL.
-   */
   customer_phone?: string;
 
-  /**
-   * OPTIONAL.
-   */
   customer_email?: string;
 
   // ----------------------------------------------------------
   // Products
   // ----------------------------------------------------------
 
-  /**
-   * Multiple individually priced products.
-   *
-   * Example:
-   *
-   * [
-   *   {
-   *     product_name: "Rings",
-   *     item_number: 1,
-   *     unit_price: 250
-   *   },
-   *   {
-   *     product_name: "Rings",
-   *     item_number: 2,
-   *     unit_price: 400
-   *   }
-   * ]
-   */
   items: InvoiceItemInput[];
 
-  /**
-   * Optional description shared by the invoice.
-   */
   product_description?: string;
 
   // ----------------------------------------------------------
-  // Tax / discount
+  // GST
   // ----------------------------------------------------------
 
+  /**
+   * true  = GST enabled
+   * false = GST disabled
+   */
+  gst_enabled: boolean;
+
+  /**
+   * Example:
+   *
+   * 3 = 3%
+   */
   tax_percent: number;
 
+  // ----------------------------------------------------------
+  // Discount
+  // ----------------------------------------------------------
+
+  /**
+   * How the user entered the discount.
+   *
+   * amount:
+   *     Fixed rupee discount.
+   *
+   * percentage:
+   *     Percentage-based discount.
+   *
+   * Optional so existing invoice records/code remain
+   * backward compatible.
+   */
+  discount_mode?: DiscountMode;
+
+  /**
+   * Percentage entered by the user when percentage mode
+   * is selected.
+   *
+   * Example:
+   *
+   * 10 = 10%
+   */
+  discount_percentage?: number;
+
+  /**
+   * Final calculated discount amount in rupees.
+   *
+   * This field remains the value sent to the backend.
+   *
+   * Example:
+   *
+   * subtotal = 1000
+   * percentage = 10
+   * discount_amount = 100
+   */
   discount_amount: number;
 
   // ----------------------------------------------------------
-  // Additional details
+  // Payment
+  // ----------------------------------------------------------
+
+  payment_mode: PaymentMode;
+
+  // ----------------------------------------------------------
+  // Additional
   // ----------------------------------------------------------
 
   notes?: string;
@@ -295,7 +386,7 @@ export interface InvoiceFormData {
   exhibition_name?: string;
 
   // ----------------------------------------------------------
-  // Offline capture timestamp
+  // Timestamp
   // ----------------------------------------------------------
 
   captured_at: string;
@@ -304,18 +395,8 @@ export interface InvoiceFormData {
   // Offline photo
   // ----------------------------------------------------------
 
-  /**
-   * Base64 encoded photo.
-   *
-   * Used when the invoice is saved offline.
-   */
   photo_base64?: string;
 
-  /**
-   * Example:
-   *
-   * image/jpeg
-   */
   photo_content_type?: string;
 }
 
@@ -332,23 +413,12 @@ export type PendingStatus =
 // PENDING INVOICE
 // ============================================================
 
-/**
- * Invoice stored locally in IndexedDB while offline.
- */
 export interface PendingInvoice
   extends InvoiceFormData {
-  /**
-   * IndexedDB generated local ID.
-   */
+
   local_id?: number;
 
-  /**
-   * Current synchronization status.
-   */
   status: PendingStatus;
 
-  /**
-   * Last synchronization error, if any.
-   */
   last_error?: string;
 }

@@ -15,7 +15,11 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+      <Route
+        path="/login"
+        element={<Login />}
+      />
+
       <Route
         path="/"
         element={
@@ -24,9 +28,20 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<NewInvoice />} />
-        <Route path="invoices" element={<InvoiceList />} />
-        <Route path="invoices/:id" element={<InvoiceDetail />} />
+        <Route
+          index
+          element={<NewInvoice />}
+        />
+
+        <Route
+          path="invoices"
+          element={<InvoiceList />}
+        />
+
+        <Route
+          path="invoices/:id"
+          element={<InvoiceDetail />}
+        />
       </Route>
     </Routes>
   );
