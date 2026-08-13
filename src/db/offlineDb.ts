@@ -845,11 +845,13 @@ export async function removeInvoicesWithoutPhoto(): Promise<number> {
       );
 
     if (!photo) {
-      await db.pendingInvoices.delete(
-        invoice.local_id,
-      );
+  if (invoice.local_id !== undefined) {
+    await db.pendingInvoices.delete(
+      invoice.local_id,
+    );
 
-      removed++;
+    removed++;
+  }
 
       console.warn(
         "[OFFLINE DB] Removed legacy invoice without photo:",

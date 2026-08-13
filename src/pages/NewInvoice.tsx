@@ -58,6 +58,10 @@ const PRODUCT_SLOTS = [
   5,
 ];
 
+// One price group contains 5 boxes. Clicking the + button
+// adds one more group of 5 boxes for that product.
+const PRICE_GROUP_SIZE = 5;
+
 const INITIAL_PRODUCTS: Product[] = [
   {
     id: "rings",
@@ -238,6 +242,21 @@ export default function NewInvoice() {
     createEmptyPrices,
   );
 
+  // Number of 5-price groups currently visible for each product.
+  // Every product starts with one group (5 boxes).
+  const [
+    priceGroupCounts,
+    setPriceGroupCounts,
+  ] = useState<Record<string, number>>(() => {
+    const result: Record<string, number> = {};
+
+    INITIAL_PRODUCTS.forEach((product) => {
+      result[product.id] = 1;
+    });
+
+    return result;
+  });
+
   // ==========================================================
   // INVOICE DETAILS
   // ==========================================================
@@ -354,6 +373,53 @@ export default function NewInvoice() {
   };
 
   // ==========================================================
+  // ADD PRICE GROUP
+  // ==========================================================
+
+  const addPriceGroup = (
+    productId: string,
+  ) => {
+    const currentGroupCount =
+      priceGroupCounts[productId] ?? 1;
+
+    const startSlot =
+      currentGroupCount *
+        PRICE_GROUP_SIZE +
+      1;
+
+    setPrices(
+      (current) => {
+        const productPrices = {
+          ...(current[productId] ?? {}),
+        };
+
+        for (
+          let slot = startSlot;
+          slot <
+            startSlot +
+              PRICE_GROUP_SIZE;
+          slot += 1
+        ) {
+          productPrices[slot] = "";
+        }
+
+        return {
+          ...current,
+          [productId]: productPrices,
+        };
+      },
+    );
+
+    setPriceGroupCounts(
+      (current) => ({
+        ...current,
+        [productId]:
+          currentGroupCount + 1,
+      }),
+    );
+  };
+
+  // ==========================================================
   // ADD PRODUCT
   // ==========================================================
 
@@ -392,6 +458,13 @@ export default function NewInvoice() {
 
         [id]:
           createEmptyProductPrices(),
+      }),
+    );
+
+    setPriceGroupCounts(
+      (current) => ({
+        ...current,
+        [id]: 1,
       }),
     );
 
@@ -435,6 +508,20 @@ export default function NewInvoice() {
         return updated;
       },
     );
+
+    setPriceGroupCounts(
+      (current) => {
+        const updated = {
+          ...current,
+        };
+
+        delete updated[
+          productId
+        ];
+
+        return updated;
+      },
+    );
   };
 
   // ==========================================================
@@ -453,8 +540,17 @@ export default function NewInvoice() {
 
       products.forEach(
         (product) => {
-          PRODUCT_SLOTS.forEach(
-            (slot) => {
+          const visibleSlotCount =
+            (priceGroupCounts[
+              product.id
+            ] ?? 1) *
+            PRICE_GROUP_SIZE;
+
+          for (
+            let slot = 1;
+            slot <= visibleSlotCount;
+            slot += 1
+          ) {
               const rawValue =
                 prices[
                   product.id
@@ -464,7 +560,7 @@ export default function NewInvoice() {
                 rawValue.trim() ===
                 ""
               ) {
-                return;
+                continue;
               }
 
               const numericValue =
@@ -477,13 +573,13 @@ export default function NewInvoice() {
                   numericValue,
                 )
               ) {
-                return;
+                continue;
               }
 
               if (
                 numericValue < 0
               ) {
-                return;
+                continue;
               }
 
               items.push({
@@ -501,8 +597,7 @@ export default function NewInvoice() {
                 price:
                   numericValue,
               });
-            },
-          );
+          }
         },
       );
 
@@ -510,6 +605,7 @@ export default function NewInvoice() {
     }, [
       products,
       prices,
+      priceGroupCounts,
     ]);
 
   // ==========================================================
@@ -928,6 +1024,9 @@ export default function NewInvoice() {
 
         discount_amount:
           discount,
+	
+	grand_total:
+  	  grandTotal,
 
         payment_mode:
           paymentMode,
@@ -1026,6 +1125,16 @@ export default function NewInvoice() {
       setPrices(
         createEmptyPrices(),
       );
+
+      setPriceGroupCounts(() => {
+        const result: Record<string, number> = {};
+
+        INITIAL_PRODUCTS.forEach((product) => {
+          result[product.id] = 1;
+        });
+
+        return result;
+      });
 
       setDiscountAmount(
         "0",
@@ -1384,8 +1493,20 @@ export default function NewInvoice() {
               {products.map(
                 (product) => {
 
+                  const visibleSlotCount =
+                    (priceGroupCounts[
+                      product.id
+                    ] ?? 1) *
+                    PRICE_GROUP_SIZE;
+
+                  const visibleSlots =
+                    Array.from(
+                      { length: visibleSlotCount },
+                      (_, index) => index + 1,
+                    );
+
                   const enteredCount =
-                    PRODUCT_SLOTS.filter(
+                    visibleSlots.filter(
                       (slot) =>
                         (
                           prices[
@@ -1437,59 +1558,102 @@ export default function NewInvoice() {
 
                       </div>
 
-                      {/* FIVE PRICE BOXES */}
+                      {/* PRICE GROUPS — EACH GROUP CONTAINS 5 BOXES + ADD BUTTON */}
 
-                      <div className="product-prices-grid">
+                      <div className="rooch-price-groups">
+                        {Array.from(
+                          {
+                            length: Math.ceil(
+                              visibleSlotCount /
+                              PRICE_GROUP_SIZE,
+                            ),
+                          },
+                          (_, groupIndex) => {
+                            const groupStart =
+                              groupIndex *
+                                PRICE_GROUP_SIZE +
+                              1;
 
-                        {PRODUCT_SLOTS.map(
-                          (slot) => {
+                            const groupSlots =
+                              Array.from(
+                                {
+                                  length:
+                                    PRICE_GROUP_SIZE,
+                                },
+                                (_, index) =>
+                                  groupStart + index,
+                              );
 
-                            const value =
-                              prices[
-                                product.id
-                              ]?.[
-                                slot
-                              ] ?? "";
+                            const isLastGroup =
+                              groupIndex ===
+                              Math.ceil(
+                                visibleSlotCount /
+                                  PRICE_GROUP_SIZE,
+                              ) - 1;
 
                             return (
                               <div
-                                key={
-                                  slot
-                                }
-                                className="price-field"
+                                key={`${product.id}-price-group-${groupIndex}`}
+                                className="rooch-price-group"
                               >
+                                {groupSlots.map(
+                                  (slot) => {
+                                    const value =
+                                      prices[
+                                        product.id
+                                      ]?.[slot] ??
+                                      "";
 
-                                <span className="price-symbol">
-                                  ₹
-                                </span>
+                                    return (
+                                      <div
+                                        key={`${product.id}-${slot}`}
+                                        className="rooch-price-field price-field"
+                                      >
+                                        <span className="price-symbol">
+                                          ₹
+                                        </span>
 
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={
-                                    value
-                                  }
-                                  onChange={(
-                                    e,
-                                  ) =>
-                                    updatePrice(
-                                      product.id,
-                                      slot,
-                                      e
-                                        .target
-                                        .value,
-                                    )
-                                  }
-                                  placeholder="0"
-                                  aria-label={`${product.name} item ${slot} price`}
-                                  className="price-input"
-                                />
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={value}
+                                          onChange={(e) =>
+                                            updatePrice(
+                                              product.id,
+                                              slot,
+                                              e.target.value,
+                                            )
+                                          }
+                                          placeholder="0"
+                                          aria-label={`${product.name} item ${slot} price`}
+                                          className="price-input rooch-price-input"
+                                        />
+                                      </div>
+                                    );
+                                  },
+                                )}
 
+                                {isLastGroup && (
+                                  <button
+                                    type="button"
+                                    className="rooch-add-price-button"
+                                    onClick={() =>
+                                      addPriceGroup(
+                                        product.id,
+                                      )
+                                    }
+                                    aria-label={`Add 5 more prices for ${product.name}`}
+                                    title="Add 5 more price boxes"
+                                  >
+                                    <span aria-hidden="true">
+                                      +
+                                    </span>
+                                  </button>
+                                )}
                               </div>
                             );
                           },
                         )}
-
                       </div>
 
                       {/* REMOVE — ONLY FOR NEWLY ADDED PRODUCTS */}

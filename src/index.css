@@ -1325,6 +1325,140 @@ textarea.invoice-input {
 }
 
 
+/* ============================================================
+   DYNAMIC PRICE GROUPS
+   ============================================================ */
+
+.product-price-groups {
+  min-width:
+    0;
+
+  width:
+    100%;
+
+  display:
+    flex;
+
+  flex-direction:
+    column;
+
+  gap:
+    8px;
+}
+
+
+.product-price-group {
+  width:
+    100%;
+
+  min-width:
+    0;
+
+  display:
+    grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    28px;
+
+  align-items:
+    center;
+
+  gap:
+    8px;
+}
+
+
+.add-price-group-button {
+  width:
+    28px;
+
+  height:
+    28px;
+
+  flex:
+    0 0 28px;
+
+  display:
+    inline-flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  padding:
+    0;
+
+  color:
+    #6f0730;
+
+  background:
+    #fffaf0;
+
+  border:
+    1px solid #d9c6a0;
+
+  border-radius:
+    50%;
+
+  font-size:
+    18px;
+
+  font-weight:
+    700;
+
+  line-height:
+    1;
+
+  cursor:
+    pointer;
+
+  appearance:
+    none;
+
+  -webkit-appearance:
+    none;
+
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+
+.add-price-group-button:hover {
+  color:
+    #ffffff;
+
+  background:
+    var(--rooch-gold);
+
+  border-color:
+    var(--rooch-gold);
+
+  transform:
+    translateY(-1px);
+}
+
+
+.add-price-group-button:active {
+  transform:
+    translateY(0);
+}
+
+
+.add-price-group-button:focus-visible {
+  outline:
+    2px solid rgba(181, 139, 66, 0.65);
+
+  outline-offset:
+    2px;
+}
+
+
 .price-field {
   position:
     relative;
@@ -3092,6 +3226,99 @@ span:not(.invoice-ready-badge) {
 
 
 /* ============================================================
+   DYNAMIC PRICE GROUP RESPONSIVENESS
+   ============================================================ */
+
+@media (max-width: 720px) {
+
+  .product-price-groups {
+    width:
+      100%;
+
+    gap:
+      7px;
+  }
+
+  .product-price-group {
+    grid-template-columns:
+      minmax(0, 1fr)
+      28px;
+
+    gap:
+      6px;
+  }
+
+  .add-price-group-button {
+    width:
+      28px;
+
+    height:
+      28px;
+
+    flex-basis:
+      28px;
+
+    font-size:
+      18px;
+  }
+}
+
+
+@media (max-width: 540px) {
+
+  .product-price-group {
+    grid-template-columns:
+      minmax(0, 1fr)
+      27px;
+
+    gap:
+      5px;
+  }
+
+  .add-price-group-button {
+    width:
+      27px;
+
+    height:
+      27px;
+
+    flex-basis:
+      27px;
+
+    font-size:
+      17px;
+  }
+}
+
+
+@media (max-width: 360px) {
+
+  .product-price-group {
+    grid-template-columns:
+      minmax(0, 1fr)
+      25px;
+
+    gap:
+      4px;
+  }
+
+  .add-price-group-button {
+    width:
+      25px;
+
+    height:
+      25px;
+
+    flex-basis:
+      25px;
+
+    font-size:
+      16px;
+  }
+}
+
+
+/* ============================================================
    MOBILE
    ============================================================ */
 
@@ -3739,5 +3966,183 @@ select:focus-visible {
 
     animation-iteration-count:
       1 !important;
+  }
+}
+/* ============================================================
+   ROOCH DYNAMIC PRICE GROUPS
+   5 price boxes + visible + button
+   ============================================================ */
+
+.rooch-price-groups {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: visible;
+}
+
+.rooch-price-group {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) 30px;
+  align-items: center;
+  gap: 6px;
+  overflow: visible;
+}
+
+.rooch-price-field {
+  width: 100%;
+  min-width: 0;
+  position: relative;
+  display: block;
+}
+
+.rooch-price-field .rooch-price-input {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rooch-add-price-button {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  position: relative !important;
+  z-index: 20 !important;
+
+  color: #6f0730 !important;
+  background: #fffaf0 !important;
+  border: 1px solid #d9c6a0 !important;
+  border-radius: 50% !important;
+
+  font-family: inherit;
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+
+  cursor: pointer !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+
+  appearance: none;
+  -webkit-appearance: none;
+
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.rooch-add-price-button span {
+  display: block;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+.rooch-add-price-button:hover {
+  color: #fff !important;
+  background: var(--rooch-gold) !important;
+  border-color: var(--rooch-gold) !important;
+  transform: translateY(-1px);
+}
+
+.rooch-add-price-button:active {
+  transform: translateY(0);
+}
+
+.rooch-add-price-button:focus-visible {
+  outline: 2px solid rgba(181, 139, 66, 0.65);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .rooch-price-group {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) 30px;
+    gap: 5px;
+  }
+}
+
+@media (max-width: 540px) {
+  .rooch-price-group {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) 28px;
+    gap: 4px;
+  }
+
+  .rooch-add-price-button {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    max-width: 28px !important;
+    font-size: 19px !important;
+  }
+
+  .rooch-price-field .rooch-price-input {
+    padding-left: 16px;
+    padding-right: 3px;
+    font-size: 10px;
+  }
+
+  .rooch-price-field .price-symbol {
+    left: 5px;
+    font-size: 7px;
+  }
+}
+
+@media (max-width: 380px) {
+  .rooch-price-group {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) 26px;
+    gap: 3px;
+  }
+
+  .rooch-add-price-button {
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px !important;
+    max-width: 26px !important;
+    font-size: 18px !important;
+  }
+
+  .rooch-price-field .rooch-price-input {
+    padding-left: 15px;
+    padding-right: 2px;
+    font-size: 9px;
+  }
+
+  .rooch-price-field .price-symbol {
+    left: 4px;
+    font-size: 7px;
+  }
+}
+
+
+/* ============================================================
+   FINAL PRICE BOX → PLUS BUTTON SPACING
+   Only affects the gap between the 5th price box and +.
+   ============================================================ */
+
+@media (max-width: 540px) {
+  .rooch-price-group {
+    column-gap: 8px !important;
+    row-gap: 4px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .rooch-price-group {
+    column-gap: 7px !important;
+    row-gap: 3px !important;
   }
 }
