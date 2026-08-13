@@ -385,6 +385,20 @@ export interface InvoiceFormData {
   payment_mode: PaymentMode;
 
   // ----------------------------------------------------------
+  // Grand total
+  // ----------------------------------------------------------
+
+  /**
+   * Final customer payable amount.
+   *
+   * GST is already included in item prices.
+   *
+   * grand_total =
+   * subtotal - discount
+   */
+  grand_total: number;
+
+  // ----------------------------------------------------------
   // Additional
   // ----------------------------------------------------------
 

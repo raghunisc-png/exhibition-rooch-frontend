@@ -1031,6 +1031,9 @@ export default function NewInvoice() {
         payment_mode:
           paymentMode,
 
+        grand_total:
+          grandTotal,
+
         notes:
           notes.trim() ||
           undefined,
