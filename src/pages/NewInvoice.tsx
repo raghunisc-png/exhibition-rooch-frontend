@@ -29,7 +29,7 @@ import {
 import type {
   DiscountMode,
   InvoiceFormData,
-} from "../types";
+} from "../types/index";
 
 // ============================================================
 // TYPES

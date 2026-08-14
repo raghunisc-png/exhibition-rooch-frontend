@@ -6,7 +6,7 @@ import type {
   InvoiceListItem,
   InvoiceOut,
   PaymentMode,
-} from "../types";
+} from "../types/index";
 
 // ============================================================
 // NORMALIZE GST BREAKUP

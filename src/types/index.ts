@@ -418,6 +418,14 @@ export interface PendingInvoice
 
   local_id?: number;
 
+  /**
+   * Final calculated payable amount stored locally.
+   *
+   * Optional because older offline invoice records
+   * may not contain this field.
+   */
+  grand_total?: number;
+
   status: PendingStatus;
 
   last_error?: string;

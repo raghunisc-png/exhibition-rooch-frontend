@@ -9,7 +9,7 @@ import {
 
 import type {
   PendingInvoice,
-} from "../types";
+} from "../types/index";
 
 // ============================================================
 // TYPES
