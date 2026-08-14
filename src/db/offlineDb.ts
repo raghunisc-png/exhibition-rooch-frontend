@@ -867,4 +867,5 @@ export async function removeInvoicesWithoutPhoto(): Promise<number> {
   }
 
   return removed;
+
 }
