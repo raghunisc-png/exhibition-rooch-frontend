@@ -301,7 +301,7 @@ export default function CameraCapture({
 
       const file = new File(
         [blob],
-        `product-photo-${Date.utcnow()}.jpg`,
+        `product-photo-${Date.now()}.jpg`,
         {
           type: "image/jpeg",
         }

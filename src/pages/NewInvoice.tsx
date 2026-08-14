@@ -134,7 +134,7 @@ function newClientUuid(): string {
     return crypto.randomUUID();
   }
 
-  return `${Date.utcnow()}-${Math.random()
+  return `${Date.now()}-${Math.random()
     .toString(36)
     .slice(2)}`;
 }
@@ -537,7 +537,7 @@ export default function NewInvoice() {
         .replace(
           /[^a-z0-9]+/g,
           "-",
-        )}-${Date.utcnow()}`;
+        )}-${Date.now()}`;
 
     const newProduct: Product = {
       id,
