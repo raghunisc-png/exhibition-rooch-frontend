@@ -29,7 +29,7 @@ import {
 import type {
   DiscountMode,
   InvoiceFormData,
-} from "../types";
+} from "../types/index";
 
 // ============================================================
 // TYPES
@@ -331,6 +331,27 @@ export default function NewInvoice() {
   const [
     error,
     setError,
+  ] = useState<string | null>(
+    null,
+  );
+
+  const [
+    phoneError,
+    setPhoneError,
+  ] = useState<string | null>(
+    null,
+  );
+
+  const [
+    emailError,
+    setEmailError,
+  ] = useState<string | null>(
+    null,
+  );
+
+  const [
+    photoError,
+    setPhotoError,
   ] = useState<string | null>(
     null,
   );
@@ -896,6 +917,9 @@ export default function NewInvoice() {
       event?.preventDefault();
 
       setError(null);
+      setPhoneError(null);
+      setEmailError(null);
+      setPhotoError(null);
       setSuccessMessage(null);
 
       // ------------------------------------------------------
@@ -912,12 +936,43 @@ export default function NewInvoice() {
         return;
       }
 
+      const phoneDigits = customerPhone
+        .replace(/^\+91\s*/, "")
+        .replace(/\D/g, "");
+
+      if (
+        phoneDigits.length > 0 &&
+        phoneDigits.length !== 10
+      ) {
+        setPhoneError(
+          "Please enter a 10-digit phone number.",
+        );
+
+        return;
+      }
+
+      const trimmedEmail =
+        customerEmail.trim();
+
+      if (
+        trimmedEmail &&
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+          trimmedEmail,
+        )
+      ) {
+        setEmailError(
+          "Please enter a valid email address.",
+        );
+
+        return;
+      }
+
       // ------------------------------------------------------
       // PHOTO
       // ------------------------------------------------------
 
       if (!photo) {
-        setError(
+        setPhotoError(
           "Please add a product photo.",
         );
 
@@ -1004,11 +1059,12 @@ export default function NewInvoice() {
           customerName.trim(),
 
         customer_phone:
-          customerPhone.trim() ||
-          undefined,
+          phoneDigits.length === 10
+            ? `+91 ${phoneDigits}`
+            : undefined,
 
         customer_email:
-          customerEmail.trim() ||
+          trimmedEmail ||
           undefined,
 
         items:
@@ -1317,20 +1373,43 @@ export default function NewInvoice() {
 
                   <input
                     type="tel"
-                    inputMode="tel"
+                    inputMode="numeric"
                     value={
                       customerPhone
                     }
                     onChange={(e) => {
                       const value = e.target.value;
-                      const withoutPrefix = value.replace(/^\+91\s*/, "");
-                      setCustomerPhone(
-                        `+91 ${withoutPrefix}`.trimEnd(),
-                      );
+
+                      if (!value.startsWith("+91 ")) {
+                        setCustomerPhone("+91 ");
+                        setPhoneError(null);
+                        return;
+                      }
+
+                      const phoneDigits = value
+                        .slice(4)
+                        .replace(/\D/g, "")
+                        .slice(0, 10);
+
+                      setCustomerPhone(`+91 ${phoneDigits}`);
+                      setPhoneError(null);
                     }}
                     placeholder="+91 98765 43210"
                     className="invoice-input"
                   />
+
+                  {phoneError && (
+                    <div
+                      style={{
+                        marginTop: "6px",
+                        color: "#b42318",
+                        fontSize: "12px",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {phoneError}
+                    </div>
+                  )}
 
                 </div>
 
@@ -1345,18 +1424,33 @@ export default function NewInvoice() {
                   </label>
 
                   <input
-                    type="email"
+                    type="text"
+                    inputMode="email"
                     value={
                       customerEmail
                     }
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setCustomerEmail(
                         e.target.value,
-                      )
-                    }
+                      );
+                      setEmailError(null);
+                    }}
                     placeholder="priya@email.com"
                     className="invoice-input"
                   />
+
+                  {emailError && (
+                    <div
+                      style={{
+                        marginTop: "6px",
+                        color: "#b42318",
+                        fontSize: "12px",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {emailError}
+                    </div>
+                  )}
 
                 </div>
 
@@ -1410,10 +1504,24 @@ export default function NewInvoice() {
 
                 <CameraCapture
                   value={photo}
-                  onChange={
-                    setPhoto
-                  }
+                  onChange={(nextPhoto) => {
+                    setPhoto(nextPhoto);
+                    setPhotoError(null);
+                  }}
                 />
+
+                {photoError && (
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      color: "#b42318",
+                      fontSize: "12px",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {photoError}
+                  </div>
+                )}
 
               </div>
 

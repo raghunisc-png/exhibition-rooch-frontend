@@ -5,7 +5,7 @@ import Dexie, {
 import type {
   InvoiceListItem,
   PendingInvoice,
-} from "../types";
+} from "../types/index";
 
 // ============================================================
 // DATABASE

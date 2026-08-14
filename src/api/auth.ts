@@ -1,5 +1,5 @@
 import { apiClient, setToken } from "./client";
-import type { Agent } from "../types";
+import type { Agent } from "../types/index";
 
 export async function login(email: string, password: string): Promise<Agent> {
   const { data } = await apiClient.post("/api/auth/login", { email, password });
@@ -11,3 +11,4 @@ export async function fetchMe(): Promise<Agent> {
   const { data } = await apiClient.get("/api/auth/me");
   return data as Agent;
 }
+

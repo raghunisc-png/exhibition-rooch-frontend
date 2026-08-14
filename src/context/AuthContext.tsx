@@ -17,7 +17,7 @@ import {
 
 import type {
   Agent,
-} from "../types";
+} from "../types/index";
 
 // ============================================================
 // AUTH + GST CONTEXT TYPE

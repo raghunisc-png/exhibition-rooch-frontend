@@ -369,7 +369,11 @@ export interface InvoiceFormData {
    * percentage = 10
    * discount_amount = 100
    */
-    discount_amount: number;
+  discount_amount: number;
+
+  // ----------------------------------------------------------
+  // Grand Total
+  // ----------------------------------------------------------
 
   /**
    * Final customer payable amount.
@@ -423,9 +427,22 @@ export type PendingStatus =
 export interface PendingInvoice
   extends InvoiceFormData {
 
+  /**
+   * Local IndexedDB primary key.
+   *
+   * Optional because it is automatically generated
+   * when the invoice is stored in Dexie.
+   */
   local_id?: number;
 
+  /**
+   * Current offline synchronization status.
+   */
   status: PendingStatus;
 
+  /**
+   * Stores the last synchronization error,
+   * if synchronization failed.
+   */
   last_error?: string;
 }
