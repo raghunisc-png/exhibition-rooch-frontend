@@ -372,6 +372,17 @@ export interface InvoiceFormData {
   discount_amount: number;
 
   // ----------------------------------------------------------
+  // Grand Total
+  // ----------------------------------------------------------
+
+  /**
+   * Final customer payable amount.
+   *
+   * Used by the offline database and sync manager.
+   */
+  grand_total: number;
+
+  // ----------------------------------------------------------
   // Payment
   // ----------------------------------------------------------
 
@@ -416,17 +427,22 @@ export type PendingStatus =
 export interface PendingInvoice
   extends InvoiceFormData {
 
+  /**
+   * Local IndexedDB primary key.
+   *
+   * Optional because it is automatically generated
+   * when the invoice is stored in Dexie.
+   */
   local_id?: number;
 
   /**
-   * Final calculated payable amount stored locally.
-   *
-   * Optional because older offline invoice records
-   * may not contain this field.
+   * Current offline synchronization status.
    */
-  grand_total?: number;
-
   status: PendingStatus;
 
+  /**
+   * Stores the last synchronization error,
+   * if synchronization failed.
+   */
   last_error?: string;
 }

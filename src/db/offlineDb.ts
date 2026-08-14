@@ -844,11 +844,6 @@ export async function removeInvoicesWithoutPhoto(): Promise<number> {
         invoice.photo_base64,
       );
 
-    // IMPORTANT:
-    // local_id is optional in PendingInvoice.
-    // Dexie delete() requires a definite number.
-    // Therefore we only delete when local_id exists.
-
     if (
       !photo &&
       invoice.local_id !== undefined
