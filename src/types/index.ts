@@ -369,7 +369,14 @@ export interface InvoiceFormData {
    * percentage = 10
    * discount_amount = 100
    */
-  discount_amount: number;
+    discount_amount: number;
+
+  /**
+   * Final customer payable amount.
+   *
+   * Used by the offline database and sync manager.
+   */
+  grand_total: number;
 
   // ----------------------------------------------------------
   // Payment
