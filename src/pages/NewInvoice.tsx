@@ -134,7 +134,7 @@ function newClientUuid(): string {
     return crypto.randomUUID();
   }
 
-  return `${Date.now()}-${Math.random()
+  return `${Date.utcnow()}-${Math.random()
     .toString(36)
     .slice(2)}`;
 }
@@ -264,7 +264,7 @@ export default function NewInvoice() {
   const [
     discountAmount,
     setDiscountAmount,
-  ] = useState("0");
+  ] = useState("");
 
   const [
     discountMode,
@@ -276,7 +276,7 @@ export default function NewInvoice() {
   const [
     discountPercentage,
     setDiscountPercentage,
-  ] = useState("0");
+  ] = useState("");
 
   const [
     exhibitionName,
@@ -318,6 +318,75 @@ export default function NewInvoice() {
     newProductName,
     setNewProductName,
   ] = useState("");
+
+  // ==========================================================
+  // VALIDATION / SCROLL
+  // ==========================================================
+
+  type ValidationField =
+    | "customer"
+    | "photo"
+    | "products";
+
+  const [
+    validationField,
+    setValidationField,
+  ] = useState<ValidationField | null>(null);
+
+  const customerNameRef =
+    useRef<HTMLInputElement | null>(null);
+
+  const photoSectionRef =
+    useRef<HTMLElement | null>(null);
+
+  const productSectionRef =
+    useRef<HTMLElement | null>(null);
+
+  const scrollToValidationField = (
+    field: ValidationField,
+  ) => {
+    setValidationField(field);
+
+    // Wait until React applies the red validation class.
+    window.setTimeout(() => {
+      const target =
+        field === "customer"
+          ? customerNameRef.current
+          : field === "photo"
+            ? photoSectionRef.current
+            : productSectionRef.current;
+
+      if (!target) {
+        return;
+      }
+
+      target.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+
+      // Mobile browsers can move the viewport again while the
+      // validation message is being rendered, so retry photo scroll.
+      if (field === "photo") {
+        window.setTimeout(() => {
+          target.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+            inline: "nearest",
+          });
+        }, 400);
+      }
+
+      if (field === "customer") {
+        window.setTimeout(() => {
+          customerNameRef.current?.focus({
+            preventScroll: true,
+          });
+        }, 450);
+      }
+    }, 50);
+  };
 
   // ==========================================================
   // SUBMIT
@@ -391,6 +460,16 @@ export default function NewInvoice() {
         },
       }),
     );
+
+    if (value.trim()) {
+      setValidationField(
+        (current) =>
+          current === "products"
+            ? null
+            : current,
+      );
+      setError(null);
+    }
   };
 
   // ==========================================================
@@ -458,7 +537,7 @@ export default function NewInvoice() {
         .replace(
           /[^a-z0-9]+/g,
           "-",
-        )}-${Date.now()}`;
+        )}-${Date.utcnow()}`;
 
     const newProduct: Product = {
       id,
@@ -920,6 +999,7 @@ export default function NewInvoice() {
       setPhoneError(null);
       setEmailError(null);
       setPhotoError(null);
+      setValidationField(null);
       setSuccessMessage(null);
 
       // ------------------------------------------------------
@@ -931,6 +1011,10 @@ export default function NewInvoice() {
       ) {
         setError(
           "Please enter the customer name.",
+        );
+
+        scrollToValidationField(
+          "customer",
         );
 
         return;
@@ -976,6 +1060,10 @@ export default function NewInvoice() {
           "Please add a product photo.",
         );
 
+        scrollToValidationField(
+          "photo",
+        );
+
         return;
       }
 
@@ -989,6 +1077,10 @@ export default function NewInvoice() {
       ) {
         setError(
           "Please enter at least one product price.",
+        );
+
+        scrollToValidationField(
+          "products",
         );
 
         return;
@@ -1288,6 +1380,7 @@ export default function NewInvoice() {
       ==================================================== */}
 
       <form
+        noValidate
         onSubmit={
           handleCreateInvoice
         }
@@ -1304,7 +1397,14 @@ export default function NewInvoice() {
               CUSTOMER
           ================================================== */}
 
-          <section className="invoice-card">
+          <section
+            ref={photoSectionRef}
+            className={`invoice-card ${
+              validationField === "photo"
+                ? "invoice-card-validation-error"
+                : ""
+            }`}
+          >
 
             <div className="invoice-card-header">
 
@@ -1347,16 +1447,35 @@ export default function NewInvoice() {
 
                   <input
                     required
+                    ref={customerNameRef}
                     value={
                       customerName
                     }
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setCustomerName(
                         e.target.value,
-                      )
-                    }
+                      );
+
+                      if (
+                        e.target.value.trim()
+                      ) {
+                        setValidationField(
+                          (current) =>
+                            current ===
+                            "customer"
+                              ? null
+                              : current,
+                        );
+                        setError(null);
+                      }
+                    }}
                     placeholder="Priya Sharma"
-                    className="invoice-input"
+                    className={`invoice-input ${
+                      validationField ===
+                      "customer"
+                        ? "validation-input-error"
+                        : ""
+                    }`}
                   />
 
                 </div>
@@ -1507,6 +1626,15 @@ export default function NewInvoice() {
                   onChange={(nextPhoto) => {
                     setPhoto(nextPhoto);
                     setPhotoError(null);
+
+                    if (nextPhoto) {
+                      setValidationField(
+                        (current) =>
+                          current === "photo"
+                            ? null
+                            : current,
+                      );
+                    }
                   }}
                 />
 
@@ -1533,7 +1661,14 @@ export default function NewInvoice() {
               PRODUCT PRICES
           ================================================== */}
 
-          <section className="invoice-card">
+          <section
+            ref={productSectionRef}
+            className={`invoice-card ${
+              validationField === "products"
+                ? "invoice-card-validation-error"
+                : ""
+            }`}
+          >
 
             <div className="invoice-card-header">
 
@@ -2489,10 +2624,6 @@ export default function NewInvoice() {
                           : undefined,
                     }}
                   >
-
-                    <span>
-                      ₹
-                    </span>
 
                     <input
                       type="number"
