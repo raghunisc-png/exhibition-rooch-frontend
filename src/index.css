@@ -959,6 +959,60 @@ textarea.invoice-input {
     rgba(181, 139, 66, 0.09);
 }
 
+/* ============================================================
+   REQUIRED FIELD VALIDATION
+   ============================================================ */
+
+.validation-input-error {
+  border:
+    2px solid var(--rooch-danger) !important;
+
+  background:
+    var(--rooch-danger-bg) !important;
+
+  box-shadow:
+    0 0 0 3px
+    rgba(185, 65, 65, 0.12) !important;
+}
+
+
+
+.invoice-card-validation-error .invoice-card-header {
+  border-bottom-color:
+    rgba(185, 65, 65, 0.22);
+}
+
+.invoice-card-validation-error .product-photo-wrapper {
+  border:
+    2px solid var(--rooch-danger);
+
+  border-radius:
+    11px;
+
+  padding:
+    6px;
+
+  background:
+    var(--rooch-danger-bg);
+
+  scroll-margin-top:
+    90px;
+}
+
+/* Make the photo target comfortable to scroll to on mobile. */
+@media (max-width: 900px) {
+  .invoice-card-validation-error {
+    scroll-margin-top:
+      24px;
+  }
+
+  .invoice-card-validation-error .product-photo-wrapper {
+    scroll-margin-top:
+      24px;
+  }
+}
+
+
 
 /* ============================================================
    PHOTO AREA
@@ -2392,6 +2446,22 @@ textarea.invoice-input {
     9px;
 }
 
+
+
+/* ============================================================
+   INVOICE SUMMARY NUMBER INPUTS
+   Remove browser spinner arrows without changing input behavior.
+   ============================================================ */
+
+.summary-inline-input input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.summary-inline-input input[type="number"]::-webkit-inner-spin-button,
+.summary-inline-input input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
 .summary-inline-input input {
   width:

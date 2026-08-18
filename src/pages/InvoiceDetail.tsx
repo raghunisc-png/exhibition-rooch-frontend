@@ -17,7 +17,7 @@ import { fileUrl } from "../api/client";
 
 import type {
   InvoiceOut,
-} from "../types";
+} from "../types/index";
 
 // ============================================================
 // MESSAGE LABELS

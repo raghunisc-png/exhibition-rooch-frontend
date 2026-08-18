@@ -22,7 +22,7 @@ import {
 import type {
   InvoiceListItem,
   PendingInvoice,
-} from "../types";
+} from "../types/index";
 
 export default function InvoiceList() {
   // ==========================================================

@@ -5,7 +5,7 @@ import Dexie, {
 import type {
   InvoiceListItem,
   PendingInvoice,
-} from "../types";
+} from "../types/index";
 
 // ============================================================
 // DATABASE
@@ -844,7 +844,10 @@ export async function removeInvoicesWithoutPhoto(): Promise<number> {
         invoice.photo_base64,
       );
 
-    if (!photo && invoice.local_id !== undefined) {
+    if (
+      !photo &&
+      invoice.local_id !== undefined
+    ) {
       await db.pendingInvoices.delete(
         invoice.local_id,
       );
